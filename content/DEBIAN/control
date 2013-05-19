@@ -1,0 +1,9 @@
+Origin: XBian
+Package: xbian-package-nzbget
+Version: x.y
+Section: video
+Priority: optional
+Architecture: armhf
+Depends: 
+Maintainer: name  <email>
+Description: nzbget for XBian.
