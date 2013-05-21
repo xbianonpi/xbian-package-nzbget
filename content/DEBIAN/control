@@ -5,7 +5,7 @@ Section: net
 Priority: optional
 Codename: wheezy
 Architecture: armhf
-Depends: libncurses5-dev, libpar2-0-dev, libssl-dev, libgnutls-dev, libxml2-dev
+Depends: xbian-update, libncurses5, libpar2-0, libssl, libgnutls, libxml2
 Installed-Size: 5080
 Maintainer: sjengfred <sjengfred@home.nl>
 Description: NZBGet 10.2 compiled, patched and configured for XBian
