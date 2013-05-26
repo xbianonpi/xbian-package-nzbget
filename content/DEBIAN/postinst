@@ -2,6 +2,31 @@
 
 if [[ $1 == "configure" ]]; then
 	
-	true
+	update-rc.d nzbget defaults 2>/dev/null 1>/dev/null >/dev/null;
+
+	if [ ! -d "/home/xbian/downloads" ]; then
+		mkdir -p /home/xbian/downloads
+	fi
+
+	chmod 777 /home/xbian/downloads
+	chown xbian:xbian /home/xbian/downloads
+
+	if [ ! -d "/home/xbian/incomplete" ]; then
+		mkdir -p /home/xbian/incomplete
+	fi
+
+	chmod 777 /home/xbian/incomplete
+	chown xbian:xbian /home/xbian/incomplete
+
+	if [ ! -d "/home/xbian/torrents" ]; then
+		mkdir -p /home/xbian/torrents
+	fi
+
+	chmod 777 /home/xbian/torrents
+	chown xbian:xbian /home/xbian/torrents
+
+	chmod 777 /usr/local/etc/nzbget/nzbget.conf
+
+	/etc/init.d/nzbget start 2>/dev/null 1>/dev/null >/dev/null; 
 
 fi
