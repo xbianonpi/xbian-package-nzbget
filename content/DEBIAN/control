@@ -1,9 +1,11 @@
 Origin: XBian
 Package: xbian-package-nzbget
-Version: x.y
-Section: video
+Version: 2.0
+Section: net
 Priority: optional
+Codename: wheezy
 Architecture: armhf
-Depends: 
-Maintainer: name  <email>
-Description: nzbget for XBian.
+Depends: xbian-update, libsigc++-dev, libncurses5, libpar2-0, libssl1.0.0, gnutls-bin, libxml2
+Maintainer: sjengfred <sjengfred@home.nl>
+Description: NZBGet 10.2 compiled, patched and configured for XBian
+Installed-Size: 6024
