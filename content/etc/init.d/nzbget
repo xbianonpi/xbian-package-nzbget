@@ -37,6 +37,8 @@ NZBGET_BINARY="/usr/local/bin/nzbget"
 # Additional options, e. g. config file location:
 NZBGET_OPTS=" -c /usr/local/etc/nzbget/nzbget.conf"
 # -----------------------------------------------------------------
+NICE=0
+# -----------------------------------------------------------------
 
 . /lib/lsb/init-functions
 test -x $NZBGET_BINARY || exit 0
@@ -75,7 +77,7 @@ case "$ACTION" in
 	start)
 		if [ $(is_running) -eq 0 ]; then
 			log_daemon_msg "Starting nzbget"
-			"$NZBGET_BINARY" $NZBGET_OPTS -D 2>/dev/null 1>/dev/null >/dev/null
+			nice -n $NICE "$NZBGET_BINARY" $NZBGET_OPTS -D 2>/dev/null 1>/dev/null >/dev/null
 			check_retval;
 		else
 			PID=$(ps -A | grep nzbget | grep -v $$ | awk '{print $1}');
