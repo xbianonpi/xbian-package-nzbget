@@ -1,0 +1,5 @@
+
+
+ENABLED=1
+
+CONFIG=/etc/nzbget/nzbget.conf

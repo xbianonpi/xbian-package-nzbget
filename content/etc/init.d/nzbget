@@ -35,12 +35,15 @@
 NZBGET_BINARY="/usr/local/bin/nzbget"
 
 # Additional options, e. g. config file location:
-NZBGET_OPTS=" -c /usr/local/etc/nzbget/nzbget.conf"
+. /etc/default/nzbget
+NZBGET_OPTS=" -c $CONFIG"
 # -----------------------------------------------------------------
 NICE=0
 # -----------------------------------------------------------------
 
 . /lib/lsb/init-functions
+
+test "$ENABLED" = '1' || exit 0
 test -x $NZBGET_BINARY || exit 0
 set -e
 
