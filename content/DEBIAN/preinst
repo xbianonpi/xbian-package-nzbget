@@ -7,9 +7,9 @@ if [ $1 == "install" -o $1 == "upgrade" ]; then
               while true; do
     			read -p "Do you want to use the old configuration file? (yes/no) " yn
     			case $yn in
-        			yes ) 	mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.reuse; 
+        			[Yy]* )	mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.reuse; 
 					break;;
-        			no )   mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.old; 
+        			[Nn]* ) mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.old; 
 					break;;
         			* ) echo "Please answer yes or no.";;
     			esac
