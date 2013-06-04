@@ -25,13 +25,6 @@ if [[ $1 == "configure" ]]; then
 	chmod 777 /home/xbian/torrents
 	chown xbian:xbian /home/xbian/torrents
 
-	if [ -f "/usr/local/etc/nzbget/nzbget.reuse" ]; then
-		mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.new;
-		mv /usr/local/etc/nzbget/nzbget.reuse /usr/local/etc/nzbget/nzbget.conf;
-	fi
-
-	chmod 777 /usr/local/etc/nzbget/nzbget.conf
-
 	/etc/init.d/nzbget start 2>/dev/null 1>/dev/null >/dev/null; 
 
 fi

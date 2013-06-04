@@ -2,9 +2,7 @@
 
 if [ $1 == "remove" ]; then
 
-        if [ -f "/etc/init.d/nzbget" ]; then
-                /etc/init.d/nzbget stop &>/dev/null;
-        fi
+        pgrep nzbget > /dev/null && [ -f /etc/init.d/nzbget ] && /etc/init.d/nzbget stop &>/dev/null || true
 
 fi
 

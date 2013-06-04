@@ -2,18 +2,5 @@
 
 if [ $1 == "install" -o $1 == "upgrade" ]; then
 
-	 if [ -f "/usr/local/etc/nzbget/nzbget.conf" ]; then
-		printf "\nPrevious configuration file found, nzbget can try to use this file so you keep your settings\n"
-              while true; do
-    			read -p "Do you want to use the old configuration file? (yes/no) " yn
-    			case $yn in
-        			[Yy]* )	mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.reuse; 
-					break;;
-        			[Nn]* ) mv /usr/local/etc/nzbget/nzbget.conf /usr/local/etc/nzbget/nzbget.old; 
-					break;;
-        			* ) echo "Please answer yes or no.";;
-    			esac
-		done
-	fi
-
+        true
 fi
