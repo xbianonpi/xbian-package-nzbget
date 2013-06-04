@@ -36,7 +36,7 @@ NZBGET_BINARY="/usr/local/bin/nzbget"
 
 # Additional options, e. g. config file location:
 . /etc/default/nzbget
-NZBGET_OPTS=" -c $CONFIG"
+NZBGET_OPTS=" -c $CONFIG_FILE"
 # -----------------------------------------------------------------
 NICE=0
 # -----------------------------------------------------------------

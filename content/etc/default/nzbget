@@ -2,4 +2,5 @@
 
 ENABLED=1
 
-CONFIG=/etc/nzbget/nzbget.conf
+CONFIG_FILE=/etc/nzbget/nzbget.conf
+SCRIPT_CONFIG_FILE="/etc/nzbget/nzbget-postprocess.conf"

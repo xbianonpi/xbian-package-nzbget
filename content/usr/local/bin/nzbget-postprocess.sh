@@ -66,7 +66,7 @@
 
 
 # Name of script's configuration file
-SCRIPT_CONFIG_FILE="nzbget-postprocess.conf"
+SCRIPT_CONFIG_FILE="/etc/nzbget/nzbget-postprocess.conf"
 
 # Exit codes
 POSTPROCESS_PARCHECK_CURRENT=91
