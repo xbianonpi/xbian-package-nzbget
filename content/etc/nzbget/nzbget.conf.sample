@@ -23,13 +23,13 @@
 #
 # On POSIX you can use "~" as alias for home directory (e.g. "~/download").
 # On Windows use absolute paths (e.g. "C:\Download").
-MainDir=~/downloads
+MainDir=/home/xbian/
 
 # Destination directory for downloaded files.
 #
 # If you want to distinguish between partially downloaded files and
 # completed downloads, use also option <InterDir>.
-DestDir=${MainDir}/dst
+DestDir=${MainDir}/downloads
 
 # Directory to store intermediate files.
 #
@@ -53,24 +53,24 @@ InterDir=
 # Can have subdirectories.
 # A nzb-file queued from a subdirectory will be automatically assigned to
 # category with the directory-name.
-NzbDir=${MainDir}/nzb
+NzbDir=${MainDir}/torrents
 
 # Directory to store download queue.
-QueueDir=${MainDir}/queue
+QueueDir=${MainDir}/incomplete
 
 # Directory to store temporary files.
-TempDir=${MainDir}/tmp
+TempDir=${MainDir}/incomplete
 
 # Lock-file for daemon-mode, POSIX only.
 #
 # If the option is not empty, NZBGet creates the file and writes process-id
 # (PID) into it. That info can be used in shell scripts.
-LockFile=${MainDir}/nzbget.lock
+LockFile=/run/nzbget.lock
 
 # Where to store log file, if it needs to be created.
 #
 # NOTE: See also option <CreateLog>.
-LogFile=${DestDir}/nzbget.log
+LogFile=/var/log/nzbget.log
 
 # Directory with web-interface files.
 #
@@ -79,7 +79,7 @@ LogFile=${DestDir}/nzbget.log
 # NOTE: To disable web-interface set the option to an empty value.
 # This however doesn't disable the built-in web-server completely because
 # it is also used to serve JSON-/XML-RPC requests.
-WebDir=
+WebDir=/usr/local/share/nzbget/webui
 
 ##############################################################################
 ### NEWS-SERVERS                                                           ###
@@ -202,13 +202,13 @@ ControlIP=0.0.0.0
 #
 # NOTE: The communication via this port is not encrypted. For encrypted
 # communication see option <SecurePort>.
-ControlPort=6789
+ControlPort=9092
 
 # Password and username which NZBGet server and remote client use.
 #
 # For authorization to web-interface use the username and the password defined here.
-ControlUser=nzbget
-ControlPassword=tegbzn6789
+ControlUser=xbian
+ControlPassword=raspberry
 
 # Secure control of NZBGet server (yes, no).
 #
@@ -241,7 +241,7 @@ SecureKey=
 # NOTE: This option has effect only if the program was started from
 # root-account, otherwise it is ignored and the daemon runs under
 # current user id.
-DaemonUserName=root
+DaemonUserName=xbian
 
 # Specify default umask (affects file permissions) for newly created
 # files, POSIX only (000-1000).
@@ -690,7 +690,7 @@ DetailTarget=both
 #
 # Debug-messages can be printed only if the program was compiled in
 # debug-mode: "./configure --enable-debug".
-DebugTarget=both
+DebugTarget=none
 
 # Set the default message-kind for output received from process-scripts
 # (PostProcess, NzbProcess, TaskX.Process) (detail, info, warning,
@@ -815,7 +815,7 @@ ParRepair=yes
 # a crash of the program. This is especially true when using "full" or
 # "auto" par-scan. NZBGet is supplied with patches addressing these
 # issues. Please apply the patches to libpar2 and recompile it.
-ParScan=auto
+ParScan=limited
 
 # Use only par2-files with matching names (yes, no).
 #
