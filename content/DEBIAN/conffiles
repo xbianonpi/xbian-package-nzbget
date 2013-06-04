@@ -1,4 +1,3 @@
-/etc/init.d/nzbget
 /etc/nzbget/nzbget.conf
 /etc/default/nzbget
 /etc/nzbget/nzbget-postprocess.conf
