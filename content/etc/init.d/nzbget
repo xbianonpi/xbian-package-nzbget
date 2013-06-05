@@ -89,15 +89,30 @@ case "$ACTION" in
 		if [ $(is_running) -eq 1 ]; then
 			log_daemon_msg "Stopping nzbget"
 			"$NZBGET_BINARY" $NZBGET_OPTS -Q 2>/dev/null 1>/dev/null >/dev/null
+			sleep 10;
 			check_retval;
 		else
 	                log_success_msg "nzbget not running"
 	        fi
 		;;
 	restart)
-		"$NZBGET_BINARY" $NZBGET_OPTS -Q
-		sleep 10 # since stop is backgrounded
-		"$NZBGET_BINARY" $NZBGET_OPTS -D
+                if [ $(is_running) -eq 1 ]; then
+                        log_daemon_msg "Stopping nzbget"
+                        "$NZBGET_BINARY" $NZBGET_OPTS -Q 2>/dev/null 1>/dev/null >/dev/null
+			sleep 10
+                        check_retval;
+                else
+                        log_success_msg "nzbget not running"
+                fi
+
+                if [ $(is_running) -eq 0 ]; then
+                        log_daemon_msg "Starting nzbget"
+                        nice -n $NICE "$NZBGET_BINARY" $NZBGET_OPTS -D 2>/dev/null 1>/dev/null >/dev/null
+                        check_retval;
+                else
+                        PID=$(ps -A | grep nzbget | grep -v $$ | awk '{print $1}');
+                        log_success_msg "nzbget already running (pid $PID)"
+               	fi
 		;;
 	status)
 		"$NZBGET_BINARY" $NZBGET_OPTS -L S
