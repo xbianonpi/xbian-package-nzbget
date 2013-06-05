@@ -6,7 +6,7 @@ if [ $1 == "install" -o $1 == "upgrade" ]; then
 
 		mv /usr/local/etc/nzbget /etc/nzbget
 		
-		ln -s /usr/local/etc/nzbget /etc/nzbget
+		ln -s /etc/nzbget /usr/local/etc/nzbget
 		
 	else
 		true
