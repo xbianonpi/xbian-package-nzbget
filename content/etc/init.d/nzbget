@@ -38,8 +38,6 @@ NZBGET_BINARY="/usr/local/bin/nzbget"
 . /etc/default/nzbget
 NZBGET_OPTS=" -c $CONFIG_FILE"
 # -----------------------------------------------------------------
-NICE=0
-# -----------------------------------------------------------------
 
 . /lib/lsb/init-functions
 
