@@ -2,13 +2,15 @@
 
 if [ $1 == "install" -o $1 == "upgrade" ]; then
 
-        if [ -f "/usr/local/etc/nzbget/nzbget.conf" ]; then
+        if [ -d "/usr/local/etc/nzbget/" ]; then
 
 		if [ ! -d "/etc/nzbget" ];then
 			mkdir /etc/nzbget
 		fi
 
-		mv /usr/local/etc/nzbget/nzbget.conf /etc/nzbget/nzbget.conf
+		mv /usr/local/etc/nzbget/* /usr/local/etc/nzbget/.[^.]* /etc/nzbget/.
+		rm -r /usr/local/etc/nzbget
+		
 	else
 		true
 	fi
