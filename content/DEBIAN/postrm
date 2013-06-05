@@ -15,7 +15,6 @@ if [ "$1" == "remove" ] || [ "$1" == "purge" ]; then
                 	rm -f /etc/default/nzbget
 		fi
 	fi
-else
 	
 	true
 	
