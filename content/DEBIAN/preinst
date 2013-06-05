@@ -9,7 +9,7 @@ if [ $1 == "install" -o $1 == "upgrade" ]; then
 		fi
 
 		mv /usr/local/etc/nzbget/* /usr/local/etc/nzbget/.[^.]* /etc/nzbget/.
-		rm -r /usr/local/etc/nzbget
+		rm -rf /usr/local/etc/nzbget
 		
 	else
 		true
