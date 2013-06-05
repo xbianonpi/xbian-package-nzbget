@@ -2,6 +2,8 @@
 
 if [ $1 == "install" -o $1 == "upgrade" ]; then
 
+	pgrep nzbget > /dev/null && [ -f /etc/init.d/nzbget ] && /etc/init.d/nzbget stop &>/dev/null || true
+
         if [ -d "/usr/local/etc/nzbget/" ]; then
 
 		mv /usr/local/etc/nzbget /etc/nzbget
