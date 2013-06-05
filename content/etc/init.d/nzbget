@@ -95,9 +95,9 @@ case "$ACTION" in
 	        fi
 		;;
 	restart)
-		$0 stop
+		"$NZBGET_BINARY" $NZBGET_OPTS -Q
 		sleep 10 # since stop is backgrounded
-		$0 start
+		"$NZBGET_BINARY" $NZBGET_OPTS -D
 		;;
 	status)
 		"$NZBGET_BINARY" $NZBGET_OPTS -L S
