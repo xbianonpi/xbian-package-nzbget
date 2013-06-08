@@ -4,6 +4,10 @@ if [ "$1" == "remove" ] || [ "$1" == "purge" ]; then
 
 	rm -fr /usr/local/share/nzbget
 	
+	if [ -h /usr/local/etc/nzbget ]; then
+		rm -f /usr/local/etc/nzbget
+	fi
+	
 # removing config files should be performed only if user requested purge
 
 	if [ "$1" == "purge" ]; then
