@@ -1,7 +1,6 @@
 
-
 ENABLED=1
 
 CONFIG_FILE=/etc/nzbget/nzbget.conf
 SCRIPT_CONFIG_FILE="/etc/nzbget/nzbget-postprocess.conf"
-NICE=0
+NICE=9
