@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 605 $
- * $Date: 2013-03-18 22:43:01 +0100 (Mon, 18 Mar 2013) $
+ * $Revision: 710 $
+ * $Date: 2013-06-16 15:00:57 +0200 (Sun, 16 Jun 2013) $
  *
  */
 
@@ -195,8 +195,9 @@ var Upload = (new function($)
 		for (var i = 0; i<selectedFiles.length; i++)
 		{
 			var file = selectedFiles[i];
+			var filename = file.name.replace(/\.queued$/g, '');
 			var html = '<table><tr><td width="18px" valign="top"><i class="icon-file" style="vertical-align:top;margin-top:2px;"></i><img class="hide" style="vertical-align:top;margin-top:1px;" src="img/transmit-file.gif" width="16px" height="16px"></td><td>' +
-				Util.formatNZBName(file.name) + '</td></tr></table>';
+				Util.formatNZBName(filename) + '</td></tr></table>';
 			$('#AddDialog_Files').append(html);
 			files.push(file);
 		}
@@ -326,7 +327,8 @@ var Upload = (new function($)
 			}
 			var category = $('#AddDialog_Category').val();
 			var priority = parseInt($('#AddDialog_Priority').val());
-			RPC.call('append', [file.name, category, priority, false, base64str], fileCompleted, fileFailure);
+			var filename = file.name.replace(/\.queued$/g, '');
+			RPC.call('append', [filename, category, priority, false, base64str], fileCompleted, fileFailure);
 		};
 
 		if (reader.readAsBinaryString)

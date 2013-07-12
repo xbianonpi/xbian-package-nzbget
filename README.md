@@ -1,2 +1,2 @@
-NZBGet 10.2 for xbian
+NZBGet 11.0 for xbian
 =====================

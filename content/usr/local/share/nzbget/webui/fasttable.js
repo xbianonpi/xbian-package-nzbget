@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 520 $
- * $Date: 2012-12-09 14:21:18 +0100 (Sun, 09 Dec 2012) $
+ * $Revision: 698 $
+ * $Date: 2013-06-02 21:20:31 +0200 (Sun, 02 Jun 2013) $
  *
  */
 
@@ -192,7 +192,7 @@
 							pageDots : Util.parseBool(config.pageDots),
 							curPage : 1,
 							checkedRows: [],
-							lastClickedRowID: 0
+							lastClickedRowID: null
 						});
 				}
 			});
@@ -225,6 +225,11 @@
 		checkedRows : function()
 		{
 			return $(this).data('fasttable').checkedRows;
+		},
+		
+		checkRow : function(id, checked)
+		{
+			checkRow($(this).data('fasttable'), id, checked);
 		},
 		
 		itemCheckClick : itemCheckClick,
@@ -624,7 +629,7 @@
 		var id = row.fasttableID;
 		var doToggle = true;
 
-		if (event.shiftKey && data.lastClickedRowID > 0)
+		if (event.shiftKey && data.lastClickedRowID != null)
 		{
 			var checked = checkedRows.indexOf(id) > -1;
 			doToggle = !checkRange(data, id, data.lastClickedRowID, !checked);
@@ -656,7 +661,7 @@
 			}
 		}
 
-		data.lastClickedRowID = 0;
+		data.lastClickedRowID = null;
 		checkAll(data, !hasSelectedItems);
 	}
 

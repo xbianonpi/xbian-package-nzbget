@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 596 $
- * $Date: 2013-03-12 21:28:03 +0100 (Tue, 12 Mar 2013) $
+ * $Revision: 689 $
+ * $Date: 2013-05-21 22:41:08 +0200 (Tue, 21 May 2013) $
  *
  */
 
@@ -261,7 +261,7 @@ var TabDialog = (new function($)
 		var dialog = this;
 		var sign = options.back ? -1 : 1;
 		var fullscreen = options.fullscreen && !options.back;
-		var bodyPadding = 30;
+		var bodyPadding = 15;
 		var dialogMargin = options.mini ? 0 : 15;
 		var dialogBorder = 2;
 
@@ -292,8 +292,8 @@ var TabDialog = (new function($)
 		// CONTROL POINT: at this point the destination dialog size is active
 		// store destination positions and sizes
 
-		var newBodyHeight = fullscreen ? windowHeight - header.outerHeight() - footer.outerHeight() - dialogMargin*2 - bodyPadding : body.height();
-		var newTabWidth = fullscreen ? windowWidth - dialogMargin*2 - dialogBorder - bodyPadding : toTab.width();
+		var newBodyHeight = fullscreen ? windowHeight - header.outerHeight() - footer.outerHeight() - dialogMargin*2 - bodyPadding*2 : body.height();
+		var newTabWidth = fullscreen ? windowWidth - dialogMargin*2 - dialogBorder - bodyPadding*2 : toTab.width();
 		var leftPos = toTab.position().left;
 		var newDialogPosition = dialog.position();
 		var newDialogWidth = dialog.width();
@@ -313,9 +313,9 @@ var TabDialog = (new function($)
 
 		body.css({position: '', height: oldBodyHeight});
 		dialog.css('overflow', 'hidden');
-		fromTab.css({position: 'absolute', left: leftPos, width: oldTabWidth});
-		toTab.css({position: 'absolute', width: newTabWidth, height: newBodyHeight, 
-			left: sign * ((options.back ? newTabWidth : oldTabWidth) + bodyPadding)});
+		fromTab.css({position: 'absolute', left: leftPos, width: oldTabWidth, height: oldBodyHeight});
+		toTab.css({position: 'absolute', width: newTabWidth, height: oldBodyHeight, 
+			left: sign * ((options.back ? newTabWidth : oldTabWidth) + bodyPadding*2)});
 		fromTab.show();
 
 		// animate dialog to destination position and sizes
@@ -356,8 +356,9 @@ var TabDialog = (new function($)
 			body.animate({height: newBodyHeight}, duration);
 		}
 
-		fromTab.animate({left: sign * -((options.back ? newTabWidth : oldTabWidth) + bodyPadding)}, duration);
-		toTab.animate({left: leftPos}, duration, function()
+		fromTab.animate({left: sign * -((options.back ? newTabWidth : oldTabWidth) + bodyPadding*2), 
+			height: newBodyHeight + bodyPadding}, duration);
+		toTab.animate({left: leftPos, height: newBodyHeight + bodyPadding}, duration, function()
 			{
 				fromTab.hide();
 				fromTab.css({position: '', width: '', height: '', left: ''});
@@ -404,7 +405,7 @@ var RPC = (new function($)
 		var _this = this;
 		
 		var request = JSON.stringify({nocache: new Date().getTime(), method: method, params: params});
-		var xhr = createXMLHttpRequest();
+		var xhr = new XMLHttpRequest();
 
 		xhr.open('post', this.rpcUrl);
 
@@ -470,41 +471,5 @@ var RPC = (new function($)
 			}
 		};
 		xhr.send(request);
-	}
-	
-	function createXMLHttpRequest()
-	{
-		var xmlHttp;
-
-		if (window.XMLHttpRequest)
-		{
-			xmlHttp = new XMLHttpRequest();
-		}
-		else if (window.ActiveXObject)
-		{
-			try
-			{
-				xmlHttp = new ActiveXObject("Msxml2.XMLHTTP");
-			}
-			catch(e)
-			{
-				try
-				{
-					xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");
-				}
-				catch(e)
-				{
-					throw(e);
-				}
-			}
-		}
-
-		if (xmlHttp==null)
-		{
-			alert("Your browser does not support XMLHTTP.");
-			throw("Your browser does not support XMLHTTP.");
-		}
-
-		return xmlHttp;
 	}
 }(jQuery));

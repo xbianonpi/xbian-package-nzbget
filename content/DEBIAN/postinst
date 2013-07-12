@@ -25,7 +25,9 @@ if [[ $1 == "configure" ]]; then
 	chmod 777 /home/xbian/torrents
 	chown xbian:xbian /home/xbian/torrents
 	
-	chmod 777 /etc/nzbget/nzbget.conf /etc/nzbget/nzbget-postprocess.conf
+	chmod 777 /etc/nzbget/nzbget.conf
+
+	sed -i 's/ControlUser=/ControlUsername=/g' /etc/nzbget/nzbget.conf
 
 	/etc/init.d/nzbget start 2>/dev/null 1>/dev/null >/dev/null; 
 

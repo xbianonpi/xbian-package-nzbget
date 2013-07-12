@@ -1,9 +1,9 @@
 Origin: XBian
 Package: xbian-package-nzbget
-Version: 10.2
+Version: 11.0
 Section: net
 Priority: optional
 Architecture: armhf
 Depends: xbian-update, libsigc++-dev, libncurses5, libpar2-0, libssl1.0.0, gnutls-bin, libxml2, unrar
 Maintainer: sjengfred <sjengfred@home.nl>
-Description: NZBGet 10.2 compiled, patched and configured for XBian
+Description: NZBGet 11.0 compiled, patched and configured for XBian

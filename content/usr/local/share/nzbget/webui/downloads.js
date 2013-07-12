@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 572 $
- * $Date: 2013-03-04 20:55:36 +0100 (Mon, 04 Mar 2013) $
+ * $Revision: 671 $
+ * $Date: 2013-05-08 23:50:47 +0200 (Wed, 08 May 2013) $
  *
  */
 
@@ -416,7 +416,14 @@ var Downloads = (new function($)
 		notification = '#Notif_Downloads_Resumed';
 		RPC.call('editqueue', ['GroupResume', 0, '', checkedEditIDs], function()
 		{
-			RPC.call('editqueue', ['GroupPauseExtraPars', 0, '', checkedEditIDs], editCompleted);
+			if (Options.option('ParCheck') === 'force')
+			{
+				editCompleted();
+			}
+			else
+			{
+				RPC.call('editqueue', ['GroupPauseExtraPars', 0, '', checkedEditIDs], editCompleted);
+			}
 		});
 	}
 
@@ -473,6 +480,9 @@ var Downloads = (new function($)
 			}
 		};
 
+		Util.show('#DownloadsDeleteConfirmDialog_Cleanup', Options.option('DeleteCleanupDisk') === 'yes');
+		Util.show('#DownloadsDeleteConfirmDialog_Remain', Options.option('DeleteCleanupDisk') != 'yes');
+		
 		ConfirmDialog.showModal('DownloadsDeleteConfirmDialog', deleteGroups);
 	}
 
@@ -653,6 +663,8 @@ var DownloadsUI = (new function($)
 					if (group.post.Log && group.post.Log.length > 0)
 					{
 						text = group.post.Log[group.post.Log.length-1].Text;
+						// remove "for <nzb-name>" from label text
+						text = text.replace(' for ' + group.NZBName, ' ');
 					}
 					else
 					{
