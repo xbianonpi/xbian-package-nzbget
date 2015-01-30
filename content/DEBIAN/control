@@ -4,6 +4,6 @@ Version: 14.1
 Section: net
 Priority: optional
 Architecture: armhf
-Depends: xbian-update, libsigc++-dev, libncurses5, libpar2-0, libssl1.0.0, gnutls-bin, libxml2, unrar
-Maintainer: sjengfred <sjengfred@home.nl>
+Depends: xbian-update, libsigc++-dev, libncurses5, libpar2-0, libssl1.0.0, libxml2, unrar
+Maintainer: freem@n <http://forum.xbian.org/user-1694.html>
 Description: NZBGet 14.1 compiled, patched and configured for XBian
