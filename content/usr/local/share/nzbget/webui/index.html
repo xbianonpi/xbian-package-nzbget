@@ -2,7 +2,7 @@
 <!--
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2015 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 1142 $
- * $Date: 2014-10-12 16:23:54 +0200 (Sun, 12 Oct 2014) $
+ * $Revision: 1191 $
+ * $Date: 2015-01-23 21:01:08 +0100 (Fri, 23 Jan 2015) $
  *
  -->
 
@@ -316,9 +316,17 @@
 
 			<div class="btn-toolbar form-inline section-toolbar" id ="HistoryTab_Toolbar">
 				<div class="btn-group">
-					<button class="btn" onclick="History.deleteClick()" title="Delete selected records"><i class="icon-trash"></i><span class="btn-caption"> Delete</span></button>
+					<button class="btn" onclick="History.actionClick('DELETE')" title="Delete selected records"><i class="icon-trash"></i><span class="btn-caption"> Delete</span></button>
+					<button class="btn dropdown-toggle" data-toggle="dropdown" title="More actions"><span class="btn-caption"> More </span><span class="phone-only inline">&nbsp;</span><span class="caret"></span></button>
+					<ul class="dropdown-menu">
+						<li class="menu-header">Actions</li>
+						<li><a href="#" id="HistoryTab_Reprocess" onclick="History.actionClick('REPROCESS')"><i class="icon-process"></i> Post-Process Again</a></li>
+						<li><a href="#" id="HistoryTab_Redownload" onclick="History.actionClick('REDOWNLOAD')"><i class="icon-downloads"></i> Download Again</a></li>
+						<li><a href="#" id="HistoryTab_MarkGood" onclick="History.actionClick('MARKGOOD')"><i class="icon-ok"></i> Mark as Good</a></li>
+						<li><a href="#" id="HistoryTab_MarkBad" onclick="History.actionClick('MARKBAD')"><i class="icon-remove"></i> Mark as Bad</a></li>
+					</ul>
 				</div>
-
+				
 				<!-- STATUS FILTER BUTTONS -->
 				<div class="btn-group phone-hide">
 					<button class="btn history-filter btn-inverse" onclick="History.filter('ALL')" title="Show All">All &nbsp;<span class="badge badge-active" id="History_Badge_ALL">?</span></button>
@@ -1258,6 +1266,13 @@
 							</div>
 						</div>
 
+						<div class="control-group">
+							<label class="control-label" for="HistoryEdit_NZBNameGroup">Name</label>
+							<div class="controls" id="HistoryEdit_NZBNameGroup">
+								<input type="text" class="input-xlarge" id="HistoryEdit_NZBName" />
+							</div>
+						</div>
+
 						<div class="control-group" id="HistoryEdit_URLGroup">
 							<label class="control-label" for="HistoryEdit_URL">Link</label>
 							<div class="controls">
@@ -1268,14 +1283,15 @@
 						<div class="control-group" id="HistoryEdit_CategoryGroup">
 							<label class="control-label" for="HistoryEdit_Category">Category</label>
 							<div class="controls">
-								<span class="input-medium uneditable-input" id="HistoryEdit_Category"></span>
+								<select id="HistoryEdit_Category">
+								</select>
 							</div>
 						</div>
 
 						<div class="control-group" id="HistoryEdit_PathGroup">
 							<label class="control-label" for="HistoryEdit_Path">Destination</label>
 							<div class="controls">
-								<span class="uneditable-mulitline-input" id="HistoryEdit_Path"></span>
+								<input type="text" class="input-xlarge" id="HistoryEdit_Path" readonly="true" />
 							</div>
 						</div>
 
@@ -1291,8 +1307,7 @@
 
 						<div class="control-group control-group-last" id="HistoryEdit_DupGroup">
 							<div class="controls">
-								This hidden history record has no information other than status.
-								It remains in history for duplicate check.
+								This hidden history record has little information. It remains in history mostly for duplicate check.
 							</div>
 						</div>
 
@@ -1905,7 +1920,7 @@
 	<div id="HistoryEditGoodConfirmDialog_Title">History</div>
 	<div id="HistoryEditGoodConfirmDialog_Text">
 		<p>
-		Mark this history record as good?
+		Mark selected history records as good?
 		</p>
 		<p class="confirm-help-block">
 		Marking has an effect on duplicate handling and RSS.<br>For titles marked as good no more duplicates
@@ -1921,7 +1936,7 @@
 	<div id="HistoryEditBadConfirmDialog_Title">History</div>
 	<div id="HistoryEditBadConfirmDialog_Text">
 		<p>
-		Mark this history record as Bad?
+		Mark selected history records as Bad?
 		</p>
 		<p class="confirm-help-block">
 		Marking has an effect on duplicate handling and RSS.<br>If dupe-backups exist in the history
@@ -2440,7 +2455,7 @@
     <strong>Returned to Queue</strong>
 </div>
 
-<div id="Notif_History_Reproces" data-duration="1000" class="alert alert-inverse alert-center alert-center-small hide">
+<div id="Notif_History_Reprocess" data-duration="1000" class="alert alert-inverse alert-center alert-center-small hide">
     <strong>Post-Processing</strong>
 </div>
 
@@ -2452,8 +2467,20 @@
     <strong>Please select records first</strong>
 </div>
 
+<div id="Notif_History_CantMark" data-duration="2000" class="alert alert-error alert-center alert-center-small hide">
+    <strong>Cannot mark URL-records</strong>
+</div>
+
 <div id="Notif_History_Marked" data-duration="1000" class="alert alert-inverse alert-center alert-center-small hide">
     <strong>Marked</strong>
+</div>
+
+<div id="Notif_History_CantReprocess" data-duration="2000" class="alert alert-error alert-center alert-center-medium hide">
+    <strong>Cannot post-process URL- or hidden records</strong>
+</div>
+
+<div id="Notif_History_CantRedownload" data-duration="2000" class="alert alert-error alert-center alert-center-medium hide">
+    <strong>Cannot redownload hidden records</strong>
 </div>
 
 <div id="Notif_Feeds_FetchAll" data-duration="1000" class="alert alert-inverse alert-center alert-center-small hide">

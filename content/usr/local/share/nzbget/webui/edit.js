@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2015 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 1108 $
- * $Date: 2014-08-28 21:15:42 +0200 (Thu, 28 Aug 2014) $
+ * $Revision: 1188 $
+ * $Date: 2015-01-17 17:34:49 +0100 (Sat, 17 Jan 2015) $
  *
  */
 
@@ -1603,14 +1603,23 @@ var HistoryEditDialog = (new function()
 				(hist.Kind === 'DUP' ? 'hidden' : hist.Kind) + '</span>');
 		}
 
+		$('#HistoryEdit_NZBName').val(hist.Name);
+		
 		if (hist.Kind !== 'DUP')
 		{
-			$('#HistoryEdit_Category').text(hist.Category);
+			// Category
+			var v = $('#HistoryEdit_Category');
+			DownloadsUI.fillCategoryCombo(v);
+			v.val(hist.Category);
+			if (v.val() != hist.Category)
+			{
+				v.append($('<option selected="selected"></option>').text(hist.Category));
+			}
 		}
 
 		if (hist.Kind === 'NZB')
 		{
-			$('#HistoryEdit_Path').text(hist.FinalDir !== '' ? hist.FinalDir : hist.DestDir);
+			$('#HistoryEdit_Path').val(hist.FinalDir !== '' ? hist.FinalDir : hist.DestDir);
 
 			var size = Util.formatSizeMB(hist.FileSizeMB, hist.FileSizeLo);
 			var completion = hist.SuccessArticles + hist.FailedArticles > 0 ? Util.round0(hist.SuccessArticles * 100.0 / (hist.SuccessArticles +  hist.FailedArticles)) + '%' : '--';
@@ -1836,7 +1845,7 @@ var HistoryEditDialog = (new function()
 
 	function reprocess()
 	{
-		notification = '#Notif_History_Reproces';
+		notification = '#Notif_History_Reprocess';
 		RPC.call('editqueue', ['HistoryProcess', 0, '', [curHist.ID]], completed);
 	}
 
@@ -1857,13 +1866,37 @@ var HistoryEditDialog = (new function()
 		disableAllButtons();
 		notification = null;
 		saveCompleted = completed;
-		saveDupeKey();
+		saveName();
+	}
+
+	function saveName()
+	{
+		var name = $('#HistoryEdit_NZBName').val();
+		name !== curHist.Name && !curHist.postprocess ?
+			RPC.call('editqueue', ['HistorySetName', 0, name, [curHist.ID]], function()
+			{
+				notification = '#Notif_History_Saved';
+				saveCategory();
+			})
+			:saveCategory();
+	}
+
+	function saveCategory()
+	{
+		var category = $('#HistoryEdit_Category').val();
+		category !== curHist.Category && curHist.Kind !== 'DUP' ?
+			RPC.call('editqueue', ['HistorySetCategory', 0, category, [curHist.ID]], function()
+			{
+				notification = '#Notif_History_Saved';
+				saveDupeKey();
+			})
+			: saveDupeKey();
 	}
 
 	function itemGood(e)
 	{
 		e.preventDefault();
-		ConfirmDialog.showModal('HistoryEditGoodConfirmDialog', doItemGood);
+		ConfirmDialog.showModal('HistoryEditGoodConfirmDialog', doItemGood, function () { HistoryUI.confirmMulti(false); });
 	}
 
 	function doItemGood()
@@ -1876,7 +1909,7 @@ var HistoryEditDialog = (new function()
 	function itemBad(e)
 	{
 		e.preventDefault();
-		ConfirmDialog.showModal('HistoryEditBadConfirmDialog', doItemBad);
+		ConfirmDialog.showModal('HistoryEditBadConfirmDialog', doItemBad, function () { HistoryUI.confirmMulti(false); });
 	}
 
 	function doItemBad()
