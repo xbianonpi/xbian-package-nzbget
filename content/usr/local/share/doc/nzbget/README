@@ -4,7 +4,7 @@
 
 This is a short documentation. For more information please
 visit NZBGet home page at 
-  http://nzbget.sourceforge.net
+  http://nzbget.net
 
 Contents          
 --------
@@ -85,15 +85,11 @@ And the following libraries are optional:
    - libcurses   (usually part of commercial systems)
      or (better)
    - libncurses  (http://invisible-island.net/ncurses)
-   
- - for par-check and -repair (enabled by default):
-   - libpar2     (http://parchive.sourceforge.net)
-   - libsigc++   (http://libsigc.sourceforge.net)
- 
+    
  - for encrypted connections (TLS/SSL):
-   - GnuTLS      (http://www.gnu.org/software/gnutls)
-     or
    - OpenSSL     (http://www.openssl.org)
+     or
+   - GnuTLS      (http://www.gnu.org/software/gnutls)
 
  - for gzip support in web-server and web-client (enabled by default):
    - zlib     (http://www.zlib.net)
@@ -151,13 +147,13 @@ You may run configure with additional arguments:
     if you can not use curses/ncurses.
     
   --disable-parcheck - to make without parcheck-support. Use this option
-    if you can not use libpar2 or libsigc++.
+    if you have troubles when compiling par2-module.
 
-  --with-tlslib=(GnuTLS, OpenSSL) - to select which TLS/SSL library
+  --with-tlslib=(OpenSSL, GnuTLS) - to select which TLS/SSL library
     should be used for encrypted server connections.
       
   --disable-tls - to make without TLS/SSL support. Use this option if
-    you can not neither GnuTLS nor OpenSSL.
+    you can not neither OpenSSL nor GnuTLS.
 
   --disable-gzip - to make without gzip support. Use this option
     if you can not use zlib.
@@ -168,37 +164,13 @@ You may run configure with additional arguments:
 Optional package: par-check
 ---------------------------
 NZBGet can check and repair downloaded files for you. For this purpose
-it uses library par2 (libpar2), which needs sigc++ on its part.
+it uses library par2.
 
-The libpar2 and libsigc++ (version 2 or later) must be installed on your
-system. On most linux distributions these libraries are available as packages.
-If you do not have these packages you can compile them yourself. 
-Following configure-parameters may be usefull:
+For your convenience the source code of libpar2 is integrated into
+NZBGet’s source tree and is compiled automatically when you make NZBGet.
 
-  --with-libpar2-includes
-  --with-libpar2-libraries
-  --with-libsigc-includes
-  --with-libsigc-libraries
-  
-The library libsigc++ must be installed first, since libpar2 requires it.
-
-If you use nzbget on a very slow computer like NAS-device, it may be good to
-limit the time allowed for par-repair (option "ParTimeLimit" in nzbget 
-configuration file). This feature requires a patched version of libpar2.
-To compile that version download the original source code of libpar2
-(version 0.2) and apply patches "libpar2-0.2-bugfixes.patch" and 
-"libpar2-0.2-cancel.patch", provided with nzbget:
-
-  cd libpar2-0.2
-  cp ~/nzbget/libpar2-0.2-*.patch .
-  patch < libpar2-0.2-bugfixes.patch
-  patch < libpar2-0.2-cancel.patch
-  ./configure
-  make
-  make install
-
-If you are not able to use libpar2 or libsigc++ or do not want them you can
-make nzbget without support for par-check using option "--disable-parcheck":
+In a case errors occur during this process the inclusion of par2-module
+can be disabled using configure option "--disable-parcheck":
 
   ./configure --disable-parcheck
 
@@ -206,7 +178,7 @@ Optional package: curses
 -------------------------
 For curses-outputmode you need ncurses or curses on your system.
 If you do not have one of them you can download and compile ncurses yourself.
-Following configure-parameters may be usefull:
+Following configure-parameters may be useful:
 
   --with-libcurses-includes
   --with-libcurses-libraries
@@ -219,14 +191,14 @@ make the program without support for curses using option "--disable-curses":
 Optional package: TLS
 -------------------------
 To enable encrypted server connections (TLS/SSL) you need to build the program
-with TLS/SSL support. NZBGet can use two libraries: GnuTLS or OpenSSL.
+with TLS/SSL support. NZBGet can use two libraries: OpenSSL or GnuTLS.
 Configure-script checks which library is installed and use it. If both are
-avialable it gives the precedence to GnuTLS. You may override that with
-the option --with-tlslib=(GnuTLS, OpenSSL). For example to build whith OpenSSL:
+available it gives the precedence to OpenSSL. You may override that with
+the option --with-tlslib=(OpenSSL, GnuTLS). For example to build with GnuTLS:
 
-  ./configure --with-tlslib=OpenSSL
+  ./configure --with-tlslib= GnuTLS
   
-Following configure-parameters may be usefull:
+Following configure-parameters may be useful:
 
   --with-libtls-includes
   --with-libtls-libraries
@@ -247,28 +219,14 @@ NZBGet is developed using MS Visual C++ 2005. The project file and solution
 are provided. If you use MS Visual C++ 2005 Express you need to download
 and install Platform SDK.
 
-To compile the program with par-check-support you also need the following 
-libraries:
-
-   - libsigc++   (http://libsigc.sourceforge.net)
-   - libpar2     (http://parchive.sourceforge.net)
-
-Download these libaries, then use patch-files provided with NZBGet to create
-preconfigured project files and solutions for each library. 
-Look at http://gnuwin32.sourceforge.net/packages/patch.htm for info on how
-to use patch-files, if you do not familiar with this technique.
-
-To compile the program with TLS/SSL support you also need the library:
-
+To compile the program with TLS/SSL support you need either OpenSSL or GnuTLS:
+   - OpenSSL  (http://www.openssl.org)
+   or
    - GnuTLS   (http://www.gnu.org/software/gnutls)
 
-Download a precompiled version of GnuTLS from http://josefsson.org/gnutls4win
-and create lib-file as described there in section "Using the GnuTLS DLL from 
-your Visual Studio program".
-
-After libsigc++ and libpar2 are compiled in static libraries (.lib), the 
-library for GnuTLS is created and include- and libraries-paths are configured 
-in MS Visual C++ 2005 you should be able to compile NZBGet.   
+Also required are:
+   - Regex (http://gnuwin32.sourceforge.net/packages/regex.htm)
+   - Zlib (http://gnuwin32.sourceforge.net/packages/zlib.htm)
 
 =====================================
 6. Configuration
@@ -387,9 +345,18 @@ It prints something like:
 
   [1] nzbname\filename1.rar (50.00 MB)
   [2] nzbname\filename1.r01 (50.00 MB)
+  [3] another-nzb\filename3.r01 (100.00 MB)
+  [4] another-nzb\filename3.r02 (100.00 MB)
 
-The numbers in square braces are ID's of files in queue. They can be used
-in edit-command. For example to move file with ID 2 to the top of queue:
+This is the list of individual files listed within nzb-file. To print
+the list of nzb-files (without content) add G-modifier to the list command:
+
+  [1] nzbname (4.56 GB)
+  [2] another-nzb (4.20 GB)
+
+The numbers in square braces are ID's of files or groups in queue.
+They can be used in edit-command. For example to move file with
+ID 2 to the top of queue:
 
   nzbget -E T 2
   
@@ -402,8 +369,8 @@ or to delete files from queue:
   nzbget -E D 3 10-15 20-21 16
 
 The edit-command has also a group-mode which affects all files from the
-same nzb-request. You need to pass one ID of any file in the group. For
-example to delete all files from the first nzb-request:
+same nzb-file. You need to pass an ID of the group. For example to delete
+the whole group 1:
 
   nzbget -E G D 1
 
@@ -444,10 +411,10 @@ Post processing scripts
 After the download of nzb-file is completed nzbget can call post-processing
 scripts, defined in configuration file.
 
-Example post-processing scripts are provided in directory "ppscripts".
+Example post-processing scripts are provided in directory "scripts".
 
 To use the scripts copy them into your local directory and set options
-<ScriptDir>, <DefScript> and <ScriptOrder>.
+<ScriptDir>, <PostScript> and <ScriptOrder>.
 
 For information on writing your own post-processing scripts please
 visit NZBGet web site.
@@ -469,13 +436,14 @@ and port defined in NZBGet configuration file in options "ControlIP" and
 
   http://localhost:6789/
 
-For login credentials type username "nzbget" (predefined and not changeable)
-and the password from the option "ControlPassword" (default is tegbzn6789).
+For login credentials type username and the password defined by
+options "ControlUsername" (default "nzbget") and "ControlPassword"
+(default "tegbzn6789").
 
 In a case your browser forget credentials, to prevent typing them each
 time, there is a workaround - use URL in the form:
 
-  http://localhost:6789/nzbget:password/
+  http://localhost:6789/username:password/
 
 Please note, that in this case the password is saved in a bookmark or in
 browser history in plain text and is easy to find by persons having
@@ -494,6 +462,32 @@ Bo Cordes Petersen (placebodk@users.sourceforge.net) until 2005.
 In 2007 the abandoned project was overtaken by Andrey Prygunkov.
 Since then the program has been completely rewritten.
 
+NZBGet distribution archive includes additional components
+written by other authors:
+
+PAR2:
+	Peter Brian Clements <peterbclements@users.sourceforge.net>
+
+PAR2 library API:
+	Francois Lesueur <flesueur@users.sourceforge.net>
+
+jQuery:
+	John Resig <http://jquery.com>
+	The Dojo Foundation <http://sizzlejs.com>
+
+Bootstrap:
+	Twitter, Inc <http://twitter.github.com/bootstrap>
+
+Raphaël:
+	Dmitry Baranovskiy <http://raphaeljs.com>
+	Sencha Labs <http://sencha.com>
+
+Elycharts:
+	Void Labs s.n.c. <http://void.it>
+
+iconSweets:
+	Yummygum <http://yummygum.com>
+
 =====================================
 9. Copyright
 =====================================
@@ -507,21 +501,13 @@ The complete content of license is provided in file COPYING.
 
 Additional exemption: compiling, linking, and/or using OpenSSL is allowed.
 
-Binary distribution for Windows contains code from the following libraries:
-
-   - libpar2     (http://parchive.sourceforge.net)
-   - libsigc++   (http://libsigc.sourceforge.net)
-   - GnuTLS      (http://www.gnu.org/software/gnutls)
-
-libpar2 is distributed under GPL; libsigc++ and GnuTLS - under LGPL.
-
 =====================================
 10. Contact
 =====================================
 
 If you encounter any problem, feel free to use the forum
 
-    nzbget.sourceforge.net/forum
+    nzbget.net/forum
 
 or contact me at
 

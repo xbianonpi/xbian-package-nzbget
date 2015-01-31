@@ -2,7 +2,7 @@
 #
 # E-Mail post-processing script for NZBGet
 #
-# Copyright (C) 2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
+# Copyright (C) 2013-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-# $Revision: 707 $
-# $Date: 2013-06-12 22:25:06 +0200 (Wed, 12 Jun 2013) $
+# $Revision: 1107 $
+# $Date: 2014-08-27 18:27:40 +0200 (Wed, 27 Aug 2014) $
 #
 
 
@@ -55,6 +55,9 @@
 
 # SMTP server password, if required.
 #Password=mypass
+
+# Append statistics to the message (yes, no).
+#Statistics=yes
 
 # Append list of files to the message (yes, no).
 #
@@ -92,74 +95,47 @@ POSTPROCESS_SUCCESS=93
 POSTPROCESS_ERROR=94
 
 # Check if the script is called from nzbget 11.0 or later
-if not 'NZBOP_SCRIPTDIR' in os.environ:
+if not 'NZBPP_TOTALSTATUS' in os.environ:
 	print('*** NZBGet post-processing script ***')
-	print('This script is supposed to be called from nzbget (11.0 or later).')
+	print('This script is supposed to be called from nzbget (13.0 or later).')
 	sys.exit(POSTPROCESS_ERROR)
 
 print('[DETAIL] Script successfully started')
 sys.stdout.flush()
 
-required_options = ('NZBPO_FROM', 'NZBPO_TO', 'NZBPO_SERVER', 'NZBPO_PORT', 'NZBPO_ENCRYPTION',
-	'NZBPO_USERNAME', 'NZBPO_PASSWORD', 'NZBPO_FILELIST', 'NZBPO_BROKENLOG', 'NZBPO_POSTPROCESSLOG')
+required_options = ('NZBPO_FROM', 'NZBPO_TO', 'NZBPO_SERVER', 'NZBPO_PORT', 'NZBPO_ENCRYPTION', 'NZBPO_USERNAME', 'NZBPO_PASSWORD')
 for	optname in required_options:
 	if (not optname in os.environ):
 		print('[ERROR] Option %s is missing in configuration file. Please check script settings' % optname[6:])
 		sys.exit(POSTPROCESS_ERROR)
+
+status = os.environ['NZBPP_STATUS']
+total_status = os.environ['NZBPP_TOTALSTATUS']
+
+# If any script fails the status of the item in the history is "WARNING/SCRIPT".
+# This status however is not passed to pp-scripts in the env var "NZBPP_STATUS"
+# because most scripts are independent of each other and should work even
+# if a previous script has failed. But not in the case of E-Mail script,
+# which should take the status of the previous scripts into account as well.
+if total_status == 'SUCCESS' and os.environ['NZBPP_SCRIPTSTATUS'] == 'FAILURE':
+	total_status = 'WARNING'
+	status = 'WARNING/SCRIPT'
 		
-# Check par and unpack status for errors.
-success=False
-if os.environ['NZBPP_PARSTATUS'] == '1' or os.environ['NZBPP_UNPACKSTATUS'] == '1':
-	subject = 'Failure for "%s"' % (os.environ['NZBPP_NZBNAME'])
-	text = 'Download of "%s" has failed.' % (os.environ['NZBPP_NZBNAME'])
-elif os.environ['NZBPP_PARSTATUS'] == '4':
-	subject = 'Damaged for "%s"' % (os.environ['NZBPP_NZBNAME'])
-	text = 'Download of "%s" requires par-repair.' % (os.environ['NZBPP_NZBNAME'])
-else:
+success = total_status == 'SUCCESS'
+if success:
 	subject = 'Success for "%s"' % (os.environ['NZBPP_NZBNAME'])
 	text = 'Download of "%s" has successfully completed.' % (os.environ['NZBPP_NZBNAME'])
-	success=True
+else:
+	subject = 'Failure for "%s"' % (os.environ['NZBPP_NZBNAME'])
+	text = 'Download of "%s" has failed.' % (os.environ['NZBPP_NZBNAME'])
 
-#  NZBPP_PARSTATUS    - result of par-check:
-#                       0 = not checked: par-check is disabled or nzb-file does
-#                           not contain any par-files;
-#                       1 = checked and failed to repair;
-#                       2 = checked and successfully repaired;
-#                       3 = checked and can be repaired but repair is disabled.
-#                       4 = par-check needed but skipped (option ParCheck=manual);
-parStatus = { '0': 'skipped', '1': 'failed', '2': 'repaired', '3': 'repairable', '4': 'manual' }
-text += '\nPar-Status: %s' % parStatus[os.environ['NZBPP_PARSTATUS']]
+text += '\nStatus: %s' % status
 
-#  NZBPP_UNPACKSTATUS - result of unpack:
-#                       0 = unpack is disabled or was skipped due to nzb-file
-#                           properties or due to errors during par-check;
-#                       1 = unpack failed;
-#                       2 = unpack successful.
-unpackStatus = { '0': 'skipped', '1': 'failed', '2': 'success' }
-text += '\nUnpack-Status: %s' % unpackStatus[os.environ['NZBPP_UNPACKSTATUS']]
-
-# add list of downloaded files
-if os.environ['NZBPO_FILELIST'] == 'yes':
-	text += '\n\nFiles:'
-	for dirname, dirnames, filenames in os.walk(os.environ['NZBPP_DIRECTORY']):
-		for filename in filenames:
-			text += '\n' + os.path.join(dirname, filename)[len(os.environ['NZBPP_DIRECTORY']) + 1:]
-
-# add _brokenlog.txt (if exists)
-if os.environ['NZBPO_BROKENLOG'] == 'yes':
-	brokenlog = '%s/_brokenlog.txt' % os.environ['NZBPP_DIRECTORY']
-	if os.path.exists(brokenlog):
-		text += '\n\nBrokenlog:\n' + open(brokenlog, 'r').read().strip()
-
-# add post-processing log
-if os.environ['NZBPO_POSTPROCESSLOG'] == 'Always' or \
-	(os.environ['NZBPO_POSTPROCESSLOG'] == 'OnFailure' and not success):
-	# To get the post-processing log we connect to NZBGet via XML-RPC
-	# and call method "postqueue", which returns the list of post-processing job.
-	# The first item in the list is current job. This item has a field 'Log',
-	# containing an array of log-entries.
-	# For more info visit http://nzbget.sourceforge.net/RPC_API_reference
-	
+if os.environ.get('NZBPO_STATISTICS') == 'yes' or \
+	os.environ.get('NZBPO_POSTPROCESSLOG') == 'Always' or \
+	(os.environ.get('NZBPO_POSTPROCESSLOG') == 'OnFailure' and not success):
+	# To get statistics or the post-processing log we connect to NZBGet via XML-RPC.
+	# For more info visit http://nzbget.net/RPC_API_reference
 	# First we need to know connection info: host, port and password of NZBGet server.
 	# NZBGet passes all configuration options to post-processing script as
 	# environment variables.
@@ -175,6 +151,73 @@ if os.environ['NZBPO_POSTPROCESSLOG'] == 'Always' or \
 	
 	# Create remote server object
 	server = ServerProxy(rpcUrl)
+
+if os.environ.get('NZBPO_STATISTICS') == 'yes':
+	# Find correct nzb in method listgroups 
+	groups = server.listgroups(0)
+	nzbID = int(os.environ['NZBPP_NZBID'])
+	for nzbGroup in groups:
+		if nzbGroup['NZBID'] == nzbID:
+			break
+
+	text += '\n\nStatistics:';
+
+	# add download size
+	DownloadedSize = float(nzbGroup['DownloadedSizeMB'])
+	unit = ' MB'
+	if DownloadedSize > 1024:
+		DownloadedSize = DownloadedSize / 1024 # GB
+		unit = ' GB'
+	text += '\nDownloaded size: %.2f' % (DownloadedSize) + unit
+
+	# add average download speed
+	DownloadedSizeMB = float(nzbGroup['DownloadedSizeMB'])
+	DownloadTimeSec = float(nzbGroup['DownloadTimeSec'])
+	if DownloadTimeSec > 0: # check x/0 errors
+		avespeed = (DownloadedSizeMB/DownloadTimeSec) # MB/s
+		unit = ' MB/s'
+		if avespeed < 1:
+			avespeed = avespeed * 1024 # KB/s
+			unit = ' KB/s'
+		text += '\nAverage download speed: %.2f' % (avespeed) + unit
+
+	def format_time_sec(sec):
+		Hour = sec/3600
+		Min = (sec - (sec/3600)*3600)/60
+		Sec = (sec - (sec/3600)*3600)%60
+		return '%d:%02d:%02d' % (Hour,Min,Sec)
+
+	# add times
+	text += '\nTotal time: ' + format_time_sec(int(nzbGroup['DownloadTimeSec']) + int(nzbGroup['PostTotalTimeSec']))
+	text += '\nDownload time: ' + format_time_sec(int(nzbGroup['DownloadTimeSec']))
+	text += '\nVerification time: ' + format_time_sec(int(nzbGroup['ParTimeSec']) - int(nzbGroup['RepairTimeSec']))
+	text += '\nRepair time: ' + format_time_sec(int(nzbGroup['RepairTimeSec']))
+	text += '\nUnpack time: ' + format_time_sec(int(nzbGroup['UnpackTimeSec']))
+
+# add list of downloaded files
+files = False
+if os.environ.get('NZBPO_FILELIST') == 'yes':
+	text += '\n\nFiles:'
+	for dirname, dirnames, filenames in os.walk(os.environ['NZBPP_DIRECTORY']):
+		for filename in filenames:
+			text += '\n' + os.path.join(dirname, filename)[len(os.environ['NZBPP_DIRECTORY']) + 1:]
+			files = True
+	if not files:
+		text += '\n<no files found>'
+
+# add _brokenlog.txt (if exists)
+if os.environ.get('NZBPO_BROKENLOG') == 'yes':
+	brokenlog = '%s/_brokenlog.txt' % os.environ['NZBPP_DIRECTORY']
+	if os.path.exists(brokenlog):
+		text += '\n\nBrokenlog:\n' + open(brokenlog, 'r').read().strip()
+
+# add post-processing log
+if os.environ.get('NZBPO_POSTPROCESSLOG') == 'Always' or \
+	(os.environ.get('NZBPO_POSTPROCESSLOG') == 'OnFailure' and not success):
+	# To get the post-processing log we call method "postqueue", which returns
+	# the list of post-processing job.
+	# The first item in the list is current job. This item has a field 'Log',
+	# containing an array of log-entries.
 	
 	# Call remote method 'postqueue'. The only parameter tells how many log-entries to return as maximum.
 	postqueue = server.postqueue(10000)
@@ -193,6 +236,8 @@ msg = MIMEText(text)
 msg['Subject'] = subject
 msg['From'] = os.environ['NZBPO_FROM']
 msg['To'] = os.environ['NZBPO_TO']
+msg['Date'] = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+msg['X-Application'] = 'NZBGet'
 
 # Send message
 print('[DETAIL] Sending E-Mail')

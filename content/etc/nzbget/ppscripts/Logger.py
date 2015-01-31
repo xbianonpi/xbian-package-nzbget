@@ -18,8 +18,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-# $Revision: 707 $
-# $Date: 2013-06-12 22:25:06 +0200 (Wed, 12 Jun 2013) $
+# $Revision: 978 $
+# $Date: 2014-04-04 23:45:48 +0200 (Fri, 04 Apr 2014) $
 #
 
 
@@ -64,7 +64,7 @@ if not os.path.exists(os.environ['NZBPP_DIRECTORY']):
 # and call method "postqueue", which returns the list of post-processing job.
 # The first item in the list is current job. This item has a field 'Log',
 # containing an array of log-entries.
-# For more info visit http://nzbget.sourceforge.net/RPC_API_reference
+# For more info visit http://nzbget.net/RPC_API_reference
 
 # First we need to know connection info: host, port and password of NZBGet server.
 # NZBGet passes all configuration options to post-processing script as

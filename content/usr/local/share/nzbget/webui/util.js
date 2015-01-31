@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 689 $
- * $Date: 2013-05-21 22:41:08 +0200 (Tue, 21 May 2013) $
+ * $Revision: 1043 $
+ * $Date: 2014-06-13 23:53:27 +0200 (Fri, 13 Jun 2014) $
  *
  */
 
@@ -99,24 +99,40 @@ var Util = (new function($)
 
 	this.formatSizeMB = function(sizeMB, sizeLo)
 	{
-		if (sizeLo !== undefined && sizeMB < 100)
+		if (sizeLo !== undefined && sizeMB < 1024)
 		{
-			sizeMB = sizeLo / 1024 / 1024;
+			sizeMB = sizeLo / 1024.0 / 1024.0;
 		}
 
-		if (sizeMB > 10240)
+		if (sizeMB >= 1024 * 1024 * 100)
+		{
+			return this.round0(sizeMB / 1024.0 / 1024.0) + '&nbsp;TB';
+		}
+		else if (sizeMB >= 1024 * 1024 * 10)
+		{
+			return this.round1(sizeMB / 1024.0 / 1024.0) + '&nbsp;TB';
+		}
+		else if (sizeMB >= 1024 * 1000)
+		{
+			return this.round2(sizeMB / 1024.0 / 1024.0) + '&nbsp;TB';
+		}
+		else if (sizeMB >= 1024 * 100)
+		{
+			return this.round0(sizeMB / 1024.0) + '&nbsp;GB';
+		}
+		else if (sizeMB >= 1024 * 10)
 		{
 			return this.round1(sizeMB / 1024.0) + '&nbsp;GB';
 		}
-		else if (sizeMB > 1024)
+		else if (sizeMB >= 1000)
 		{
 			return this.round2(sizeMB / 1024.0) + '&nbsp;GB';
 		}
-		else if (sizeMB > 100)
+		else if (sizeMB >= 100)
 		{
 			return this.round0(sizeMB) + '&nbsp;MB';
 		}
-		else if (sizeMB > 10)
+		else if (sizeMB >= 10)
 		{
 			return this.round1(sizeMB) + '&nbsp;MB';
 		}
@@ -126,6 +142,26 @@ var Util = (new function($)
 		}
 	}
 
+	this.formatSpeed = function(bytesPerSec)
+	{
+		if (bytesPerSec >= 100 * 1024 * 1024)
+		{
+			return Util.round0(bytesPerSec / 1024.0 / 1024.0) + '&nbsp;MB/s';
+		}
+		else if (bytesPerSec >= 10 * 1024 * 1024)
+		{
+			return Util.round1(bytesPerSec / 1024.0 / 1024.0) + '&nbsp;MB/s';
+		}
+		else if (bytesPerSec >= 1024 * 1000)
+		{
+			return Util.round2(bytesPerSec / 1024.0 / 1024.0) + '&nbsp;MB/s';
+		}
+		else
+		{
+			return Util.round0(bytesPerSec / 1024.0) + '&nbsp;KB/s';
+		}
+	}
+	
 	this.formatAge = function(time)
 	{
 		if (time == 0)
@@ -138,9 +174,13 @@ var Util = (new function($)
 		{
 			return this.round0(diff / (60*60*24))  +'&nbsp;d';
 		}
-		else
+		else if (diff > 60*60)
 		{
 			return this.round0(diff / (60*60))  +'&nbsp;h';
+		}
+		else
+		{
+			return this.round0(diff / (60))  +'&nbsp;m';
 		}
 	}
 
@@ -221,7 +261,7 @@ var Util = (new function($)
 		var $elem = $(dialog);
 		if (center)
 		{
-			var top = ($(window).height() - $elem.outerHeight())/2;
+			var top = ($(window).height() - $elem.outerHeight()) * 0.4;
 			top = top > 0 ? top : 0;
 			$elem.css({ top: top});
 		}
@@ -230,6 +270,22 @@ var Util = (new function($)
 			$elem.css({ top: '' });
 		}
 	}
+
+	this.parseCommaList = function(commaList)
+	{
+		var valueList = commaList.split(/[,;]+/);
+		for (var i=0; i < valueList.length; i++)
+		{
+			valueList[i] = valueList[i].trim();
+			if (valueList[i] === '')
+			{
+				valueList.splice(i, 1);
+				i--;
+			}
+		}
+		return valueList;
+	}
+
 }(jQuery));
 
 
@@ -243,8 +299,25 @@ var TabDialog = (new function($)
 	{
 		dialog.restoreTab = restoreTab;
 		dialog.switchTab = switchTab;
+		dialog.maximize = maximize;
 	}
 	
+	function maximize(options)
+	{
+		var bodyPadding = 15;
+		var dialog = this;
+		var body = $('.modal-body', dialog);
+		var footer = $('.modal-footer', dialog);
+		var header = $('.modal-header', dialog);
+		body.css({top: header.outerHeight(), bottom: footer.outerHeight()});
+		if (options.mini)
+		{
+			var scrollheader = $('.modal-scrollheader', dialog);
+			var scroll = $('.modal-inner-scroll', dialog);
+			scroll.css('min-height', dialog.height() - header.outerHeight() - footer.outerHeight() - scrollheader.height() - bodyPadding*2);
+		}
+	}
+
 	function restoreTab()
 	{
 		var dialog = this;
@@ -264,6 +337,7 @@ var TabDialog = (new function($)
 		var bodyPadding = 15;
 		var dialogMargin = options.mini ? 0 : 15;
 		var dialogBorder = 2;
+		var toggleClass = options.toggleClass ? options.toggleClass : '';
 
 		var body = $('.modal-body', dialog);
 		var footer = $('.modal-footer', dialog);
@@ -288,6 +362,7 @@ var TabDialog = (new function($)
 
 		fromTab.hide();
 		toTab.show();
+		dialog.toggleClass(toggleClass);
 
 		// CONTROL POINT: at this point the destination dialog size is active
 		// store destination positions and sizes
@@ -317,6 +392,7 @@ var TabDialog = (new function($)
 		toTab.css({position: 'absolute', width: newTabWidth, height: oldBodyHeight, 
 			left: sign * ((options.back ? newTabWidth : oldTabWidth) + bodyPadding*2)});
 		fromTab.show();
+		dialog.toggleClass(toggleClass);
 
 		// animate dialog to destination position and sizes
 
@@ -354,6 +430,7 @@ var TabDialog = (new function($)
 		else
 		{
 			body.animate({height: newBodyHeight}, duration);
+			dialog.animate({width: newDialogWidth, 'margin-left': newDialogMarginLeft}, duration);
 		}
 
 		fromTab.animate({left: sign * -((options.back ? newTabWidth : oldTabWidth) + bodyPadding*2), 
@@ -363,7 +440,8 @@ var TabDialog = (new function($)
 				fromTab.hide();
 				fromTab.css({position: '', width: '', height: '', left: ''});
 				toTab.css({position: '', width: '', height: '', left: ''});
-				dialog.css({overflow: '', width: (fullscreen ? 'auto' : ''), height: (fullscreen ? 'auto' : '')});
+				dialog.css({overflow: '', width: (fullscreen ? 'auto' : ''), height: (fullscreen ? 'auto' : ''), 'margin-left': (fullscreen ? dialogMargin : '')});
+				dialog.toggleClass(toggleClass);
 				if (fullscreen)
 				{
 					body.css({position: 'absolute', height: '', left: 0, right: 0, 
@@ -400,7 +478,7 @@ var RPC = (new function($)
 	this.defaultFailureCallback;
 	this.connectErrorMessage = 'Cannot establish connection';
 
-	this.call = function(method, params, completed_callback, failure_callback)
+	this.call = function(method, params, completed_callback, failure_callback, timeout)
 	{
 		var _this = this;
 		
@@ -408,6 +486,11 @@ var RPC = (new function($)
 		var xhr = new XMLHttpRequest();
 
 		xhr.open('post', this.rpcUrl);
+		
+		if (timeout)
+		{
+			xhr.timeout = timeout;
+		}
 
 		// Example for cross-domain access:
 		//xhr.open('post', 'http://localhost:6789/jsonrpc');

@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 710 $
- * $Date: 2013-06-16 15:00:57 +0200 (Sun, 16 Jun 2013) $
+ * $Revision: 1119 $
+ * $Date: 2014-09-05 22:22:49 +0200 (Fri, 05 Sep 2014) $
  *
  */
 
@@ -172,9 +172,12 @@ var Upload = (new function($)
 	{
 		var inp = $('#AddDialog_Input');
 
-		// Reset file input control (needed for IE10)
-		inp.wrap('<form>').closest('form').get(0).reset();
-		inp.unwrap();
+		// Reset file input control; needed for IE10 but produce problems with opera (the old non-webkit one).
+		if ($.browser.msie)
+		{
+			inp.wrap('<form>').closest('form').get(0).reset();
+			inp.unwrap();
+		}
 		
 		inp.click();
 	}
@@ -219,6 +222,8 @@ var Upload = (new function($)
 		$('#AddDialog_FilesHelp').show();
 		$('#AddDialog_URLLabel img').hide();
 		$('#AddDialog_URLLabel i').hide();
+		$('#AddDialog_Paused').prop('checked', false);
+		$('#AddDialog_DupeForce').prop('checked', false);
 		enableAllButtons();
 
 		var v = $('#AddDialog_Priority');
@@ -328,7 +333,9 @@ var Upload = (new function($)
 			var category = $('#AddDialog_Category').val();
 			var priority = parseInt($('#AddDialog_Priority').val());
 			var filename = file.name.replace(/\.queued$/g, '');
-			RPC.call('append', [filename, category, priority, false, base64str], fileCompleted, fileFailure);
+			var addPaused = $('#AddDialog_Paused').is(':checked');
+			var dupeMode = $('#AddDialog_DupeForce').is(':checked') ? "FORCE" : "SCORE";
+			RPC.call('append', [filename, base64str, category, priority, false, addPaused, '', 0, dupeMode], fileCompleted, fileFailure);
 		};
 
 		if (reader.readAsBinaryString)
@@ -343,8 +350,9 @@ var Upload = (new function($)
 
 	function fileCompleted(result)
 	{
-		errors |= !result;
-		needRefresh |= result;
+		var failure = result < 0 || (result == 0 && Options.option('ScanScript') === '');
+		errors |= failure;
+		needRefresh |= !failure;
 		if (result)
 		{
 			filesSuccess.push(files[index]);
@@ -369,14 +377,17 @@ var Upload = (new function($)
 
 		var category = $('#AddDialog_Category').val();
 		var priority = parseInt($('#AddDialog_Priority').val());
+		var addPaused = $('#AddDialog_Paused').is(':checked');
+		var dupeMode = $('#AddDialog_DupeForce').is(':checked') ? "FORCE" : "SCORE";
 
-		RPC.call('appendurl', ['', category, priority, false, url], urlCompleted, urlFailure);
+		RPC.call('append', ['', url, category, priority, false, addPaused, '', 0, dupeMode], urlCompleted, urlFailure);
 	}
 
 	function urlCompleted(result)
 	{
-		errors |= !result;
-		needRefresh |= result;
+		var failure = result <= 0;
+		errors |= failure;
+		needRefresh |= !failure;
 		if (result)
 		{
 			$('#AddDialog_URL').empty();

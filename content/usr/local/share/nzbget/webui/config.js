@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 716 $
- * $Date: 2013-06-26 22:52:10 +0200 (Wed, 26 Jun 2013) $
+ * $Revision: 1097 $
+ * $Date: 2014-08-19 21:56:09 +0200 (Tue, 19 Aug 2014) $
  *
  */
 
@@ -65,7 +65,7 @@ var Options = (new function($)
 
 			// loading config templates and build list of post-processing parameters
 			_this.postParamConfig = [];
-			RPC.call('configtemplates', [], function(data)
+			RPC.call('configtemplates', [false], function(data)
 				{
 					initPostParamConfig(data);
 					RPC.next();
@@ -116,7 +116,7 @@ var Options = (new function($)
 	function serverValuesLoaded(data)
 	{
 		serverValues = data;
-		RPC.call('configtemplates', [], serverTemplateLoaded, loadServerTemplateError);
+		RPC.call('configtemplates', [true], serverTemplateLoaded, loadServerTemplateError);
 	}
 
 	function serverTemplateLoaded(data)
@@ -152,6 +152,10 @@ var Options = (new function($)
 			scriptConfig.name = scriptConfig.name.replace(/\\/, ' \\ ').replace(/\//, ' / ');
 			scriptConfig.shortName = shortScriptName(scriptName);
 			scriptConfig.shortName = scriptConfig.shortName.replace(/\\/, ' \\ ').replace(/\//, ' / ');
+			scriptConfig.post = serverTemplateData[i].PostScript;
+			scriptConfig.scan = serverTemplateData[i].ScanScript;
+			scriptConfig.queue = serverTemplateData[i].QueueScript;
+			scriptConfig.scheduler = serverTemplateData[i].SchedulerScript;
 			mergeValues(scriptConfig.sections, serverValues);
 			config.push(scriptConfig);
 		}
@@ -416,32 +420,35 @@ var Options = (new function($)
 
 		for (var i=1; i < data.length; i++)
 		{
-			var scriptName = data[i].Name;
-			var sectionId = (scriptName + ':').replace(/ |\/|[\.|$|\:|\*]/g, '_');
-			var option = {};
-			option.name = scriptName + ':';
-			option.caption = shortScriptName(scriptName);
-			option.caption = option.caption.replace(/\\/, ' \\ ').replace(/\//, ' / ');
-
-			option.defvalue = 'no';
-			option.description = (data[i].Template.trim().split('\n')[0].substr(1, 1000).trim() || 'Post-processing script ' + scriptName + '.');
-			option.value = null;
-			option.sectionId = sectionId;
-			option.select = ['yes', 'no'];
-			section.options.push(option);
-
-			var templateData = data[i].Template;
-			var postConfig = readConfigTemplate(templateData, POSTPARAM_SECTIONS, undefined, scriptName + ':');
-			for (var j=0; j < postConfig.sections.length; j++)
+			if (data[i].PostScript)
 			{
-				var sec = postConfig.sections[j];
-				if (!sec.hidden)
+				var scriptName = data[i].Name;
+				var sectionId = (scriptName + ':').replace(/ |\/|[\.|$|\:|\*]/g, '_');
+				var option = {};
+				option.name = scriptName + ':';
+				option.caption = shortScriptName(scriptName);
+				option.caption = option.caption.replace(/\\/, ' \\ ').replace(/\//, ' / ');
+
+				option.defvalue = 'no';
+				option.description = (data[i].Template.trim().split('\n')[0].substr(1, 1000).trim() || 'Post-processing script ' + scriptName + '.');
+				option.value = null;
+				option.sectionId = sectionId;
+				option.select = ['yes', 'no'];
+				section.options.push(option);
+
+				var templateData = data[i].Template;
+				var postConfig = readConfigTemplate(templateData, POSTPARAM_SECTIONS, undefined, scriptName + ':');
+				for (var j=0; j < postConfig.sections.length; j++)
 				{
-					for (var n=0; n < sec.options.length; n++)
+					var sec = postConfig.sections[j];
+					if (!sec.hidden)
 					{
-						var option = sec.options[n];
-						option.sectionId = sectionId;
-						section.options.push(option);
+						for (var n=0; n < sec.options.length; n++)
+						{
+							var option = sec.options[n];
+							option.sectionId = sectionId;
+							section.options.push(option);
+						}
 					}
 				}
 			}
@@ -465,16 +472,21 @@ var Config = (new function($)
 	var $ConfigInfo;
 	var $ConfigTitle;
 	var $ConfigTable;
+	var $ViewButton;
+	var $LeaveConfigDialog;
 	var $Body;
 
 	// State
-	var config;
+	var config = null;
 	var values;
 	var filterText = '';
 	var lastSection;
 	var reloadTime;
 	var updateTabInfo;
 	var restored = false;
+	var compactMode = false;
+	var configSaved = false;
+	var leaveTarget;
 
 	this.init = function(options)
 	{
@@ -488,12 +500,15 @@ var Config = (new function($)
 		$ConfigContent = $('#ConfigContent');
 		$ConfigInfo = $('#ConfigInfo');
 		$ConfigTitle = $('#ConfigTitle');
+		$ViewButton = $('#Config_ViewButton');
+		$LeaveConfigDialog = $('#LeaveConfigDialog');
 
 		Util.show('#ConfigBackupSafariNote', $.browser.safari);
 		$('#ConfigTable_filter').val('');
+		compactMode = UISettings.read('$Config_ViewCompact', 'no') == 'yes';
+		setViewMode();
 
-		$('#ConfigTabLink').on('show', show);
-		$('#ConfigTabLink').on('shown', shown);
+		$(window).bind('beforeunload', userLeavesPage);
 
 		$ConfigNav.on('click', 'li > a', navClick);
 
@@ -507,20 +522,12 @@ var Config = (new function($)
 			});
 	}
 
-	this.cleanup = function()
-	{
-		Options.cleanup();
-		config = null;
-		$ConfigNav.children().not('.config-static').remove();
-		$ConfigData.children().not('.config-static').remove();
-	}
-
 	this.config = function()
 	{
 		return config;
 	}
 
-	function show()
+	this.show = function()
 	{
 		removeSaveBanner();
 		$('#ConfigSaved').hide();
@@ -528,15 +535,24 @@ var Config = (new function($)
 		$('#ConfigLoadServerTemplateError').hide();
 		$('#ConfigLoadError').hide();
 		$ConfigContent.hide();
+		configSaved = false;
 	}
 
-	function shown()
+	this.shown = function()
 	{
 		Options.loadConfig({
 			complete: buildPage,
 			configError: loadConfigError,
 			serverTemplateError: loadServerTemplateError
 			});
+	}
+
+	this.hide = function()
+	{
+		Options.cleanup();
+		config = null;
+		$ConfigNav.children().not('.config-static').remove();
+		$ConfigData.children().not('.config-static').remove();
 	}
 
 	function loadConfigError(message, resultObj)
@@ -574,8 +590,9 @@ var Config = (new function($)
 				for (var j=0; j < section.options.length; j++)
 				{
 					var option = section.options[j];
-					if ((option.Name && option.Name.toLowerCase() === name) ||
-						(option.name && option.name.toLowerCase() === name))
+					if (!option.template &&
+						((option.Name && option.Name.toLowerCase() === name) ||
+						 (option.name && option.name.toLowerCase() === name)))
 					{
 						return option;
 					}
@@ -764,7 +781,7 @@ var Config = (new function($)
 		}
 		else if (option.name.toLowerCase().indexOf('username') > -1 ||
 				option.name.toLowerCase().indexOf('password') > -1 ||
-				   option.name.indexOf('IP') > -1)
+				(option.name.indexOf('IP') > -1 && option.name.toLowerCase() !== 'authorizedip'))
 		{
 			option.type = 'text';
 			html += '<input type="text" id="' + option.formId + '" value="' + Util.textToAttr(value) + '" class="editsmall">';
@@ -775,7 +792,7 @@ var Config = (new function($)
 			html += '<table class="editor"><tr><td>';
 			html += '<input type="text" id="' + option.formId + '" value="' + Util.textToAttr(value) + '">';
 			html += '</td><td>';
-			html += '<button class="btn" onclick="' + option.editor.click + '($(\'input\', $(this).closest(\'table\')).attr(\'id\'))">' + option.editor.caption + '</button>';
+			html += '<button id="' + option.formId + '_Editor" class="btn" onclick="' + option.editor.click + '($(\'input\', $(this).closest(\'table\')).attr(\'id\'))">' + option.editor.caption + '</button>';
 			html += '</td></tr></table>';
 		}
 		else
@@ -788,14 +805,15 @@ var Config = (new function($)
 		{
 			var htmldescr = option.description;
 			htmldescr = htmldescr.replace(/NOTE: do not forget to uncomment the next line.\n/, '');
-			htmldescr = htmldescr.replace(/\</g, 'OPENTAG');
-			htmldescr = htmldescr.replace(/\>/g, 'CLOSETAG');
-			htmldescr = htmldescr.replace(/OPENTAG/g, '<a class="option" href="#" onclick="Config.scrollToOption(event, this)">');
-			htmldescr = htmldescr.replace(/CLOSETAG/g, '</a>');
+
+			// replace option references
+			var exp = /\<([A-Z0-9]*)\>/ig;
+			htmldescr = htmldescr.replace(exp, '<a class="option" href="#" onclick="Config.scrollToOption(event, this)">$1</a>');
+
 			htmldescr = htmldescr.replace(/&/g, '&amp;');
 
 			// replace URLs
-			var exp = /(http:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+			exp = /(http:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
 			htmldescr = htmldescr.replace(exp, "<a href='$1'>$1</a>");
 
 			// highlight first line
@@ -809,6 +827,12 @@ var Config = (new function($)
 			if (htmldescr.indexOf('INFO FOR DEVELOPERS:') > -1)
 			{
 				htmldescr = htmldescr.replace(/INFO FOR DEVELOPERS:<br>/g, '<input class="btn btn-mini" value="Show more info for developers" type="button" onclick="Config.showSpoiler(this)"><span class="hide">');
+				htmldescr += '</span>';
+			}
+
+			if (htmldescr.indexOf('MORE INFO:') > -1)
+			{
+				htmldescr = htmldescr.replace(/MORE INFO:<br>/g, '<input class="btn btn-mini" value="Show more info" type="button" onclick="Config.showSpoiler(this)"><span class="hide">');
 				htmldescr += '</span>';
 			}
 
@@ -846,6 +870,11 @@ var Config = (new function($)
 			html += '<div class="' + section.id + ' multiid' + multiid + ' multiset">';
 			html += '<button type="button" class="btn config-delete" data-multiid="' + multiid + ' multiset" ' +
 				'onclick="Config.deleteSet(this, \'' + setname + '\',\'' + section.id + '\')">Delete ' + setname + multiid + '</button>';
+			if (setname.toLowerCase() === 'feed')
+			{
+				html += ' <button type="button" class="btn config-previewfeed config-feed" data-multiid="' + multiid + ' multiset" ' +
+					'onclick="Config.previewFeed(this, \'' + setname + '\',\'' + section.id + '\')">Preview Feed</button>';
+			}
 			html += '<hr>';
 			html += '</div>';
 		}
@@ -899,6 +928,8 @@ var Config = (new function($)
 				$ConfigNav.append(html);
 			}
 		}
+		
+		notifyChanges();
 
 		$ConfigNav.append('<li class="divider hide ConfigSearch"></li>');
 		$ConfigNav.append('<li class="hide ConfigSearch"><a href="#Search">SEARCH RESULTS</a></li>');
@@ -967,13 +998,12 @@ var Config = (new function($)
 			option.sectionId = firstVisibleSection.id;
 			option.select = [];
 			var description = conf.description;
-			option.description = description !== '' ? description : 'No description available.\n\nNOTE: The script doesn\'t have a description section. '+
-				'It\'s either not NZBGet script or a script created for an older NZBGet version and might not work properly.';
+			option.description = description !== '' ? description : 'No description available.';
 			option.nocontent = true;
 			firstVisibleSection.options.unshift(option);
 		}
 
-		// register editors for options "DefScript" and "ScriptOrder"
+		// register editors for certain options
 		var conf = config[0];
 		for (var j=0; j < conf.sections.length; j++)
 		{
@@ -986,14 +1016,54 @@ var Config = (new function($)
 				{
 					option.editor = { caption: 'Reorder', click: 'Config.editScriptOrder' };
 				}
-				if (optname.indexOf('defscript') > -1)
+				if (optname.indexOf('postscript') > -1)
 				{
-					option.editor = { caption: 'Choose', click: 'Config.editDefScript' };
+					option.editor = { caption: 'Choose', click: 'Config.editPostScript' };
+				}
+				if (optname.indexOf('scanscript') > -1)
+				{
+					option.editor = { caption: 'Choose', click: 'Config.editScanScript' };
+				}
+				if (optname.indexOf('queuescript') > -1)
+				{
+					option.editor = { caption: 'Choose', click: 'Config.editQueueScript' };
+				}
+				if (optname.indexOf('task') > -1 && optname.indexOf('.param') > -1)
+				{
+					option.editor = { caption: 'Choose', click: 'Config.editSchedulerScript' };
+				}
+				if (optname.indexOf('task') > -1 && optname.indexOf('.command') > -1)
+				{
+					option.onchange = Config.schedulerCommandChanged;
+				}
+				if (optname.indexOf('.filter') > -1)
+				{
+					option.editor = { caption: 'Change', click: 'Config.editFilter' };
 				}
 			}
 		}
 	}
 
+	function notifyChanges()
+	{
+		for (var k=0; k < config.length; k++)
+		{
+			var sections = config[k].sections;
+			for (var i=0; i < sections.length; i++)
+			{
+				var section = sections[i];
+				for (var j=0; j < section.options.length; j++)
+				{
+					var option = section.options[j];
+					if (option.onchange && !option.template)
+					{
+						option.onchange(option);
+					}
+				}
+			}
+		}
+	}
+	
 	function scrollOptionIntoView(optFormId)
 	{
 		var option = findOptionById(optFormId);
@@ -1017,12 +1087,29 @@ var Config = (new function($)
 		var state = $(control).val().toLowerCase();
 		$('.btn', $(control).parent()).removeClass('btn-primary');
 		$(control).addClass('btn-primary');
+
+		// not for page Postprocess in download details
+		if (config)
+		{
+			var optFormId = $(control).parent().attr('id');
+			var option = findOptionById(optFormId);
+			if (option.onchange)
+			{
+				option.onchange(option);
+			}
+		}
 	}
 
 	function switchGetValue(control)
 	{
-		var state = $('.btn-primary', $(control).parent()).val();
+		var state = $('.btn-primary', control).val();
 		return state;
+	}
+
+	function switchSetValue(control, value)
+	{
+		$('.btn', control).removeClass('btn-primary');
+		$('.btn@[value=' + value + ']', control).addClass('btn-primary');
 	}
 
 	/*** CHANGE/ADD/REMOVE OPTIONS *************************************************************/
@@ -1040,6 +1127,7 @@ var Config = (new function($)
 		$('li', $ConfigNav).removeClass('active');
 		link.closest('li').addClass('active');
 		$ConfigContent.removeClass('search');
+		Util.show($ViewButton, sectionId !== 'Config-Info');
 
 		$ConfigInfo.hide();
 
@@ -1141,6 +1229,7 @@ var Config = (new function($)
 					$('.config-settitle.' + section.id + '.multiid' + oldMultiId, $ConfigData).text(setname + newMultiId);
 					$('.' + section.id + '.multiid' + oldMultiId + ' .config-multicaption', $ConfigData).text(setname + newMultiId + '.');
 					$('.' + section.id + '.multiid' + oldMultiId + ' .config-delete', $ConfigData).text('Delete ' + setname + newMultiId).attr('data-multiid', newMultiId);
+					$('.' + section.id + '.multiid' + oldMultiId + ' .config-feed', $ConfigData).attr('data-multiid', newMultiId);
 
 					//update class
 					$('.' + section.id + '.multiid' + oldMultiId, $ConfigData).removeClass('multiid' + oldMultiId).addClass('multiid' + newMultiId);
@@ -1150,6 +1239,9 @@ var Config = (new function($)
 				var oldFormId = option.formId;
 				option.formId = option.formId.replace(new RegExp(option.multiid), newMultiId);
 				$('#' + oldFormId).attr('id', option.formId);
+
+				// update editor id
+				$('#' + oldFormId + '_Editor').attr('id', option.formId + '_Editor');
 
 				// update name
 				option.name = option.name.replace(new RegExp(option.multiid), newMultiId);
@@ -1181,6 +1273,7 @@ var Config = (new function($)
 		multiid++;
 
 		// create new multi set
+		var addedOptions = [];
 		for (var j=0; j < section.options.length; j++)
 		{
 			var option = section.options[j];
@@ -1194,6 +1287,7 @@ var Config = (new function($)
 				newoption.template = false;
 				newoption.multiid = multiid;
 				section.options.push(newoption);
+				addedOptions.push(newoption);
 			}
 		}
 
@@ -1210,6 +1304,15 @@ var Config = (new function($)
 		div.hide();
 		addButton.parent().before(div);
 
+		for (var j=0; j < addedOptions.length; j++)
+		{
+			var option = addedOptions[j];
+			if (option.onchange)
+			{
+				option.onchange(option);
+			}
+		}
+		
 		div.slideDown('normal', function()
 		{
 			var opts = div.children();
@@ -1219,17 +1322,93 @@ var Config = (new function($)
 		});
 	}
 
+	this.viewMode = function()
+	{
+		compactMode = !compactMode;
+		UISettings.write('$Config_ViewCompact', compactMode ? 'yes' : 'no');
+		setViewMode();
+	}
+
+	function setViewMode()
+	{
+		$('#Config_ViewCompact i').toggleClass('icon-ok', compactMode).toggleClass('icon-empty', !compactMode);
+		$ConfigContent.toggleClass('hide-help-block', compactMode);
+	}
+
 	/*** OPTION SPECIFIC EDITORS *************************************************/
+
 	this.editScriptOrder = function(optFormId)
 	{
 		var option = findOptionById(optFormId);
-		ScriptListDialog.showModal(option, config);
+		ScriptListDialog.showModal(option, config, null);
 	}
 
-	this.editDefScript = function(optFormId)
+	this.editPostScript = function(optFormId)
 	{
 		var option = findOptionById(optFormId);
-		ScriptListDialog.showModal(option, config);
+		ScriptListDialog.showModal(option, config, 'post');
+	}
+
+	this.editScanScript = function(optFormId)
+	{
+		var option = findOptionById(optFormId);
+		ScriptListDialog.showModal(option, config, 'scan');
+	}
+
+	this.editQueueScript = function(optFormId)
+	{
+		var option = findOptionById(optFormId);
+		ScriptListDialog.showModal(option, config, 'queue');
+	}
+
+	this.editSchedulerScript = function(optFormId)
+	{
+		var option = findOptionById(optFormId);
+		var command = getOptionValue(findOptionById(optFormId.replace(/Param/, 'Command')));
+		if (command !== 'Script')
+		{
+			alert('This button is to choose scheduler scripts when option TaskX.Command is set to "Script".');
+			return;
+		}
+		ScriptListDialog.showModal(option, config, 'scheduler');
+	}
+
+	this.schedulerCommandChanged = function(option)
+	{
+		var command = getOptionValue(option);
+		var btnId = option.formId.replace(/Command/, 'Param_Editor');
+		Util.show('#' + btnId, command === 'Script');
+	}
+	
+	/*** RSS FEEDS ********************************************************************/
+
+	this.editFilter = function(optFormId)
+	{
+		var option = findOptionById(optFormId);
+		FeedFilterDialog.showModal(
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Name')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.URL')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Filter')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.PauseNzb')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Category')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Priority')),
+			function(filter)
+				{
+					var control = $('#' + option.formId);
+					control.val(filter);
+				});
+	}
+
+	this.previewFeed = function(control, setname, sectionId)
+	{
+		var multiid = parseInt($(control).attr('data-multiid'));
+		FeedDialog.showModal(0,
+			getOptionValue(findOptionByName('Feed' + multiid + '.Name')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.URL')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.Filter')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.PauseNzb')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.Category')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.Priority')));
 	}
 
 	/*** SAVE ********************************************************************/
@@ -1248,6 +1427,20 @@ var Config = (new function($)
 	}
 	this.getOptionValue = getOptionValue;
 
+	function setOptionValue(option, value)
+	{
+		var control = $('#' + option.formId);
+		if (option.type === 'switch')
+		{
+			switchSetValue(control, value);
+		}
+		else
+		{
+			control.val(value);
+		}
+	}
+	this.setOptionValue = setOptionValue;
+	
 	// Checks if there are obsolete or invalid options
 	function invalidOptionsExist()
 	{
@@ -1266,7 +1459,7 @@ var Config = (new function($)
 		return false;
 	}
 
-	function prepareSaveRequest()
+	function prepareSaveRequest(onlyUserChanges)
 	{
 		var modified = false;
 		var request = [];
@@ -1291,7 +1484,14 @@ var Config = (new function($)
 							}
 							if (newValue != null)
 							{
-								modified = modified || (oldValue != newValue) || (option.value === null);
+								if (onlyUserChanges)
+								{
+									modified = modified || (oldValue != newValue && oldValue !== null);
+								}
+								else
+								{
+									modified = modified || (oldValue != newValue) || (option.value === null);
+								}
 								var opt = {Name: option.name, Value: newValue};
 								request.push(opt);
 							}
@@ -1302,12 +1502,14 @@ var Config = (new function($)
 			}
 		}
 
-		return modified || invalidOptionsExist() || restored ? request : [];
+		return modified || (!onlyUserChanges && invalidOptionsExist()) || restored ? request : [];
 	}
 
 	this.saveChanges = function()
 	{
-		var serverSaveRequest = prepareSaveRequest();
+		$LeaveConfigDialog.modal('hide');
+
+		var serverSaveRequest = prepareSaveRequest(false);
 
 		if (serverSaveRequest.length === 0)
 		{
@@ -1318,7 +1520,6 @@ var Config = (new function($)
 		showSaveBanner();
 
 		Util.show('#ConfigSaved_Reload, #ConfigReload', serverSaveRequest.length > 0);
-		Util.show('#ConfigClose, #ConfigSaved_Close', serverSaveRequest.length === 0);
 
 		if (serverSaveRequest.length > 0)
 		{
@@ -1348,11 +1549,34 @@ var Config = (new function($)
 		{
 			Notification.show('#Notif_Config_Failed');
 		}
+		configSaved = true;
 	}
 
-	this.close = function()
+	this.canLeaveTab = function(target)
 	{
-		$('#DownloadsTabLink').tab('show');
+		if (!config || prepareSaveRequest(true).length === 0 || configSaved)
+		{
+			return true;
+		}
+
+		leaveTarget = target;
+		$LeaveConfigDialog.modal({backdrop: 'static'});
+		return false;
+	}
+
+	function userLeavesPage(e)
+	{
+		if (config && !configSaved && !UISettings.connectionError && prepareSaveRequest(true).length > 0)
+		{
+			return "Discard changes?";
+		}
+	}
+
+	this.discardChanges = function()
+	{
+		configSaved = true;
+		$LeaveConfigDialog.modal('hide');
+		leaveTarget.click();
 	}
 
 	this.scrollToOption = function(event, control)
@@ -1495,16 +1719,9 @@ var Config = (new function($)
 
 	/*** RELOAD ********************************************************************/
 
-	this.reloadConfirm = function()
-	{
-		ConfirmDialog.showModal('ReloadConfirmDialog', Config.reload);
-	}
-
-	this.reload = function()
+	function restart(callback)
 	{
 		Refresher.pause();
-
-		$('#ConfigReloadAction').text('Stopping all activities and reloading...');
 		$('#ConfigReloadInfoNotes').hide();
 
 		$('body').fadeOut(function()
@@ -1515,8 +1732,19 @@ var Config = (new function($)
 			$('body').show();
 			$('#ConfigReloadInfo').fadeIn();
 			reloadTime = new Date();
-			RPC.call('reload', [], reloadCheckStatus);
+			callback();
 		});
+	}
+
+	this.reloadConfirm = function()
+	{
+		ConfirmDialog.showModal('ReloadConfirmDialog', Config.reload);
+	}
+
+	this.reload = function()
+	{
+		$('#ConfigReloadAction').text('Stopping all activities and reloading...');
+		restart(function() { RPC.call('reload', [], reloadCheckStatus); });
 	}
 
 	function reloadCheckStatus()
@@ -1561,6 +1789,42 @@ var Config = (new function($)
 		Options.reloadConfig(values, buildPage);
 		restored = true;
 	}
+
+	/*** SHUTDOWN ********************************************************************/
+
+	this.shutdownConfirm = function()
+	{
+		ConfirmDialog.showModal('ShutdownConfirmDialog', Config.shutdown);
+	}
+
+	this.shutdown = function()
+	{
+		$('#ConfigReloadTitle').text('Shutdown NZBGet');
+		$('#ConfigReloadAction').text('Stopping all activities...');
+		restart(function() { RPC.call('shutdown', [], shutdownCheckStatus); });
+	}
+
+	function shutdownCheckStatus()
+	{
+		RPC.call('version', [], function(version)
+			{
+				// the program still runs, waiting 0.5 sec. and retrying
+				setTimeout(shutdownCheckStatus, 500);
+			},
+			function()
+			{
+				// the program has been stopped
+				$('#ConfigReloadTransmit').hide();
+				$('#ConfigReloadAction').text('The program has been stopped.');
+			});
+	}
+
+	/*** UPDATE ********************************************************************/
+
+	this.checkUpdates = function()
+	{
+		UpdateDialog.showModal();
+	}
 }(jQuery));
 
 
@@ -1575,7 +1839,9 @@ var ScriptListDialog = (new function($)
 	var $ScriptTable;
 	var option;
 	var config;
+	var kind;
 	var scriptList;
+	var allScripts;
 	var orderChanged;
 	var orderMode;
 
@@ -1607,10 +1873,11 @@ var ScriptListDialog = (new function($)
 		});
 	}
 
-	this.showModal = function(_option, _config)
+	this.showModal = function(_option, _config, _kind)
 	{
 		option = _option;
 		config = _config;
+		kind = _kind;
 		orderChanged = false;
 		orderMode = option.name === 'ScriptOrder';
 
@@ -1631,7 +1898,7 @@ var ScriptListDialog = (new function($)
 		Util.show('#ScriptListDialog_OrderInfo', orderMode, 'inline-block');
 
 		buildScriptList();
-		var selectedList = parseCommaList(Config.getOptionValue(option));
+		var selectedList = Util.parseCommaList(Config.getOptionValue(option));
 		updateTable(selectedList);
 
 		$ScriptListDialog.modal({backdrop: 'static'});
@@ -1663,33 +1930,25 @@ var ScriptListDialog = (new function($)
 		$ScriptTable.fasttable('update', data);
 	}
 
-	function parseCommaList(commaList)
-	{
-		var valueList = commaList.split(/[,;]+/);
-		for (var i=0; i < valueList.length; i++)
-		{
-			valueList[i] = valueList[i].trim();
-			if (valueList[i] === '')
-			{
-				valueList.splice(i, 1);
-				i--;
-			}
-		}
-		return valueList;
-	}
-
 	function buildScriptList()
 	{
-		var orderList = parseCommaList(Config.getOptionValue(Config.findOptionByName('ScriptOrder')));
+		var orderList = Util.parseCommaList(Config.getOptionValue(Config.findOptionByName('ScriptOrder')));
 
 		var availableScripts = [];
+		var availableAllScripts = [];
 		for (var i=1; i < config.length; i++)
 		{
-			availableScripts.push(config[i].scriptName);
+			availableAllScripts.push(config[i].scriptName);
+			if (!kind || config[i][kind])
+			{
+				availableScripts.push(config[i].scriptName);
+			}
 		}
 		availableScripts.sort();
+		availableAllScripts.sort();
 
 		scriptList = [];
+		allScripts = [];
 
 		// first add all scripts from orderList
 		for (var i=0; i < orderList.length; i++)
@@ -1699,15 +1958,29 @@ var ScriptListDialog = (new function($)
 			{
 				scriptList.push(scriptName);
 			}
+			if (availableAllScripts.indexOf(scriptName) > -1)
+			{
+				allScripts.push(scriptName);
+			}
 		}
 
-		// second add all other scripts from script list
+		// add all other scripts of this kind from script list
 		for (var i=0; i < availableScripts.length; i++)
 		{
 			var scriptName = availableScripts[i];
-			if (scriptList.indexOf(scriptName) == -1)
+			if (scriptList.indexOf(scriptName) === -1)
 			{
 				scriptList.push(scriptName);
+			}
+		}
+
+		// add all other scripts of other kinds from script list
+		for (var i=0; i < availableAllScripts.length; i++)
+		{
+			var scriptName = availableAllScripts[i];
+			if (allScripts.indexOf(scriptName) === -1)
+			{
+				allScripts.push(scriptName);
 			}
 		}
 
@@ -1740,7 +2013,26 @@ var ScriptListDialog = (new function($)
 		{
 			var scriptOrderOption = Config.findOptionByName('ScriptOrder');
 			var control = $('#' + scriptOrderOption.formId);
-			control.val(scriptList.join(', '));
+
+			// preserving order of scripts of other kinds which were not visible in the dialog
+			var orderList = [];
+			for (var i=0; i < allScripts.length; i++)
+			{
+				var scriptName = allScripts[i];
+				if (orderList.indexOf(scriptName) === -1)
+				{
+					if (scriptList.indexOf(scriptName) > -1)
+					{
+						orderList = orderList.concat(scriptList);
+					}
+					else
+					{
+						orderList.push(scriptName);
+					}
+				}
+			}
+			
+			control.val(orderList.join(', '));
 		}
 
 		$ScriptListDialog.modal('hide');
@@ -1996,7 +2288,7 @@ var ConfigBackupRestore = (new function($)
 				removeValue(option.name);
 				addValue(option.name);
 			}
-			else if (!option.template && option.multiid === 1)
+			else if (option.template)
 			{
 				// delete all multi-options
 				for (var j=1; ; j++)
@@ -2018,7 +2310,7 @@ var ConfigBackupRestore = (new function($)
 				}
 			}
 		}
-		
+
 		for (var k=0; k < config.length; k++)
 		{
 			var conf = config[k];
@@ -2133,4 +2425,333 @@ var RestoreSettingsDialog = (new function($)
 		setTimeout(function() { restoreClick(checkedRows); }, 0);
 	}
 
+}(jQuery));
+
+
+/*** UPDATE DIALOG *******************************************************/
+
+var UpdateDialog = (new function($)
+{
+	'use strict'
+
+	// Controls
+	var $UpdateDialog;
+	var $UpdateProgressDialog;
+	var $UpdateProgressDialog_Log;
+	
+	// State
+	var VersionInfo;
+	var PackageInfo;
+	var UpdateInfo;
+	var lastUpTimeSec;
+	var installing = false;
+
+	this.init = function()
+	{
+		$UpdateDialog = $('#UpdateDialog');
+		$('#UpdateDialog_InstallStable,#UpdateDialog_InstallTesting,#UpdateDialog_InstallDevel').click(install);
+		$UpdateProgressDialog = $('#UpdateProgressDialog');
+		$UpdateProgressDialog_Log = $('#UpdateProgressDialog_Log');
+
+		$UpdateDialog.on('hidden', resumeRefresher);
+		$UpdateProgressDialog.on('hidden', resumeRefresher);
+	}
+
+	function resumeRefresher()
+	{
+		if (!installing)
+		{
+			Refresher.resume();
+		}
+	}
+	
+	this.showModal = function()
+	{
+		$('#UpdateDialog_Install').hide();
+		$('#UpdateDialog_CheckProgress').show();
+		$('#UpdateDialog_CheckFailed').hide();
+		$('#UpdateDialog_Versions').hide();
+		$('#UpdateDialog_UpdateAvail').hide();
+		$('#UpdateDialog_UpdateNotAvail').hide();
+		$('#UpdateDialog_UpdateNoInfo').hide();
+		$('#UpdateDialog_InstalledInfo').show();
+
+		$('#UpdateDialog_VerInstalled').text(Options.option('Version'));
+		
+		PackageInfo = {};
+		VersionInfo = {};
+		UpdateInfo = {};
+
+		installing = false;
+		Refresher.pause();
+
+		$UpdateDialog.modal({backdrop: 'static'});
+
+		RPC.call('readurl', ['http://nzbget.net/info/nzbget-version.php?nocache=' + new Date().getTime(), 'version info'], loadedUpstreamInfo, error);
+	}
+	
+	function error(e)
+	{
+		$('#UpdateDialog_CheckProgress').hide();
+		$('#UpdateDialog_CheckFailed').show();
+	}
+
+	function parseJsonP(jsonp)
+	{
+		var p = jsonp.indexOf('{');
+		var obj = JSON.parse(jsonp.substr(p, 10000));
+		return obj;
+	}
+	
+	function loadedUpstreamInfo(data)
+	{
+		VersionInfo = parseJsonP(data);
+		if (VersionInfo['devel-version'])
+		{
+			loadPackageInfo();
+		}
+		else
+		{
+			loadSvnVerData();
+		}
+	}
+
+	function loadSvnVerData()
+	{
+		// fetching devel version number from svn viewer
+		RPC.call('readurl', ['http://svn.code.sf.net/p/nzbget/code/trunk/', 'svn revision info'], 
+			function(svnRevData)
+			{
+				RPC.call('readurl', ['http://svn.code.sf.net/p/nzbget/code/trunk/configure.ac', 'svn branch info'], 
+					function(svnBranchData)
+					{
+						var rev = svnRevData.match(/.*Revision (\d+).*/);
+						if (rev.length > 1)
+						{
+							var ver = svnBranchData.match(/.*AM_INIT_AUTOMAKE\(nzbget, (.*)\).*/);
+							if (ver.length > 1)
+							{
+								VersionInfo['devel-version'] = ver[1] + '-r' + rev[1];
+							}
+						}
+						
+						loadPackageInfo();
+					}, error);
+			}, error);
+	}
+	
+	function loadPackageInfo()
+	{
+		$.get('package-info.json', loadedPackageInfo, 'html').fail(loadedAll);
+	}
+	
+	function loadedPackageInfo(data)
+	{
+		PackageInfo = parseJsonP(data);
+		if (PackageInfo['update-info-link'])
+		{
+			RPC.call('readurl', [PackageInfo['update-info-link'], 'update info'], loadedUpdateInfo, loadedAll);
+		}
+		else if (PackageInfo['update-info-script'])
+		{
+			RPC.call('checkupdates', [], loadedUpdateInfo, loadedAll);
+		}
+		else
+		{
+			loadedAll();
+		}
+	}
+
+	function loadedUpdateInfo(data)
+	{
+		UpdateInfo = parseJsonP(data);
+		loadedAll();
+	}
+	
+	function formatTesting(str)
+	{
+		return str.replace('-testing-', '-');
+	}
+	
+	function revision(version)
+	{
+		var rev = version.match(/.*r(\d+)/);
+		return rev && rev.length > 1 ? parseInt(rev[1]) : 0;
+	}
+
+	function vernumber(version)
+	{
+		var ver = version.match(/([\d.]+).*/);
+		return ver && ver.length > 1 ? parseFloat(ver[1]) : 0;
+	}
+	
+	function loadedAll()
+	{
+		var installedVersion = Options.option('Version');
+
+		$('#UpdateDialog_CheckProgress').hide();
+		$('#UpdateDialog_Versions').show();
+		$('#UpdateDialog_InstalledInfo').show();
+
+		$('#UpdateDialog_CurStable').text(VersionInfo['stable-version'] ? VersionInfo['stable-version'] : 'no data');
+		$('#UpdateDialog_CurTesting').text(VersionInfo['testing-version'] ? formatTesting(VersionInfo['testing-version']) : 'no data');
+		$('#UpdateDialog_CurDevel').text(VersionInfo['devel-version'] ? formatTesting(VersionInfo['devel-version']) : 'no data');
+
+		$('#UpdateDialog_CurNotesStable').attr('href', VersionInfo['stable-release-notes']);
+		$('#UpdateDialog_CurNotesTesting').attr('href', VersionInfo['testing-release-notes']);
+		$('#UpdateDialog_CurNotesDevel').attr('href', VersionInfo['devel-release-notes']);
+		Util.show('#UpdateDialog_CurNotesStable', VersionInfo['stable-release-notes']);
+		Util.show('#UpdateDialog_CurNotesTesting', VersionInfo['testing-release-notes']);
+		Util.show('#UpdateDialog_CurNotesDevel', VersionInfo['devel-release-notes']);
+	
+		$('#UpdateDialog_AvailStable').text(UpdateInfo['stable-version'] ? UpdateInfo['stable-version'] : 'not available');
+		$('#UpdateDialog_AvailTesting').text(UpdateInfo['testing-version'] ? formatTesting(UpdateInfo['testing-version']) : 'not available');
+		$('#UpdateDialog_AvailDevel').text(UpdateInfo['devel-version'] ? formatTesting(UpdateInfo['devel-version']) : 'not available');
+
+		$('#UpdateDialog_AvailNotesStable').attr('href', UpdateInfo['stable-package-info']);
+		$('#UpdateDialog_AvailNotesTesting').attr('href', UpdateInfo['testing-package-info']);
+		$('#UpdateDialog_AvailNotesDevel').attr('href', UpdateInfo['devel-package-info']);
+		Util.show('#UpdateDialog_AvailNotesStableBlock', UpdateInfo['stable-package-info']);
+		Util.show('#UpdateDialog_AvailNotesTestingBlock', UpdateInfo['testing-package-info']);
+		Util.show('#UpdateDialog_AvailNotesDevelBlock', UpdateInfo['devel-package-info']);
+
+		var installedRev = revision(installedVersion);
+		var installedVer = vernumber(installedVersion);
+		var installedStable = installedRev === 0 && installedVersion.indexOf('testing') === -1;
+		
+		var canInstallStable = UpdateInfo['stable-version'] && 
+			((installedStable && installedVer < vernumber(UpdateInfo['stable-version'])) || 
+			 (!installedStable && installedVer <= vernumber(UpdateInfo['stable-version'])));
+		var canInstallTesting = UpdateInfo['testing-version'] && 
+			((installedStable && installedVer < vernumber(UpdateInfo['testing-version'])) || 
+			 (!installedStable && (installedRev === 0 || installedRev < revision(UpdateInfo['testing-version']))));
+		var canInstallDevel = UpdateInfo['devel-version'] && 
+			((installedStable && installedVer < vernumber(UpdateInfo['devel-version'])) || 
+			 (!installedStable && (installedRev === 0 || installedRev < revision(UpdateInfo['devel-version']))));
+		Util.show('#UpdateDialog_InstallStable', canInstallStable);
+		Util.show('#UpdateDialog_InstallTesting', canInstallTesting);
+		Util.show('#UpdateDialog_InstallDevel', canInstallDevel);
+		
+		var hasUpdateSource = PackageInfo['update-info-link'] || PackageInfo['update-info-script'];
+		var hasUpdateInfo = UpdateInfo['stable-version'] || UpdateInfo['testing-version'] || UpdateInfo['devel-version'];
+		var canUpdate = canInstallStable || canInstallTesting || canInstallDevel;
+		Util.show('#UpdateDialog_UpdateAvail', canUpdate);
+		Util.show('#UpdateDialog_UpdateNotAvail', hasUpdateInfo && !canUpdate);
+		Util.show('#UpdateDialog_UpdateNoInfo', !hasUpdateSource);
+		Util.show('#UpdateDialog_CheckFailed', hasUpdateSource && !hasUpdateInfo);
+		$('#UpdateDialog_AvailRow').toggleClass('hide', !hasUpdateInfo);
+	}
+	
+	function install(e)
+	{
+		e.preventDefault();
+		var kind = $(this).attr('data-kind');
+		var script = PackageInfo['install-script'];
+		var info = PackageInfo['install-' + kind + '-info'];
+		
+		if (!script)
+		{
+			alert('Something is wrong with a package configuration file "package-info.json".');
+			return;
+		}
+
+		RPC.call('status', [], function(status)
+			{
+				lastUpTimeSec = status.UpTimeSec;
+				RPC.call('startupdate', [kind], updateStarted);
+			});
+	}
+	
+	function updateStarted(started)
+	{
+		if (!started)
+		{
+			Notification.show('#Notif_StartUpdate_Failed');
+			return;
+		}
+
+		installing = true;
+		$UpdateDialog.fadeOut(250, function()
+			{
+				$UpdateProgressDialog_Log.text('');
+				$UpdateProgressDialog.fadeIn(250, function()
+					{
+						$UpdateDialog.modal('hide');
+						$UpdateProgressDialog.modal({backdrop: 'static'});
+						updateLog();
+					});
+			});
+	}
+	
+	function updateLog()
+	{
+		RPC.call('logupdate', [0, 100], function(data)
+			{
+				updateLogTable(data);
+				setTimeout(updateLog, 500);
+			},
+			function()
+			{
+				// rpc-failure: the program has been terminated. Waiting for new instance.
+				setLogContentAndScroll($UpdateProgressDialog_Log.html() + '\n' + 'NZBGet has been terminated. Waiting for restart...');
+				setTimeout(checkStatus, 500);
+			},
+			1000);
+	}
+
+	function setLogContentAndScroll(html)
+	{
+		var scroll = $UpdateProgressDialog_Log.prop('scrollHeight') - $UpdateProgressDialog_Log.prop('scrollTop') === $UpdateProgressDialog_Log.prop('clientHeight');
+		$UpdateProgressDialog_Log.html(html);
+		if (scroll)
+		{
+			$UpdateProgressDialog_Log.scrollTop($UpdateProgressDialog_Log.prop('scrollHeight'));
+		}
+	}
+	
+	function updateLogTable(messages)
+	{
+		var html = '';
+		for (var i=0; i < messages.length; i++)
+		{
+			var message = messages[i];
+			var text = Util.textToHtml(message.Text);
+			if (message.Kind === 'ERROR')
+			{
+				text = '<span class="update-log-error">' + text + '</span>';
+			}
+			html = html + text + '\n';
+		}
+		setLogContentAndScroll(html);
+	}
+	
+	function checkStatus()
+	{
+		RPC.call('status', [], function(status)
+			{
+				// OK, checking if it is a restarted instance
+				if (status.UpTimeSec >= lastUpTimeSec)
+				{
+					// the old instance is not restarted yet
+					// waiting 0.5 sec. and retrying
+					setTimeout(checkStatus, 500);
+				}
+				else
+				{
+					// restarted successfully, refresh page
+					setLogContentAndScroll($UpdateProgressDialog_Log.html() + '\n' + 'Successfully started. Refreshing the page...');
+					setTimeout(function()
+						{
+							document.location.reload(true);
+						}, 1000);
+				}
+			},
+			function()
+			{
+				// Failure, waiting 0.5 sec. and retrying
+				setTimeout(checkStatus, 500);
+			},
+			1000);
+	}
+	
 }(jQuery));

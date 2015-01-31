@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 698 $
- * $Date: 2013-06-02 21:20:31 +0200 (Sun, 02 Jun 2013) $
+ * $Revision: 973 $
+ * $Date: 2014-04-01 23:06:31 +0200 (Tue, 01 Apr 2014) $
  *
  */
 
@@ -50,11 +50,14 @@ var UISettings = (new function($)
 	this.slideAnimation = true;
 
 	// Automatically set focus to the first control in dialogs.
-	// Not good on touch devices, because may pop up the on-screen-keyboard.
+	// Not good on touch devices, because may pop up an on-screen-keyboard.
 	this.setFocus = false;
 
 	// Show popup notifications.
-	this.showNotifications = true;
+	this.notifications = true;
+
+	// Show badges with duplicate info (downloads and history).
+	this.dupeBadges = false;
 
 	// Time zone correction in hours.
 	// You shouldn't require this unless you can't set the time zone on your computer/device properly.
@@ -130,6 +133,8 @@ var Frontend = (new function($)
 	var mobileSafari = false;
 	var scrollbarWidth = 0;
 	var switchingTheme = false;
+	var activeTab = 'Downloads';
+	var lastTab = '';
 	
 	this.init = function()
 	{
@@ -155,11 +160,17 @@ var Frontend = (new function($)
 		Messages.init({ updateTabInfo: updateTabInfo });
 		History.init({ updateTabInfo: updateTabInfo });
 		Upload.init();
+		Feeds.init();
+		FeedDialog.init();
+		FeedFilterDialog.init();
 		Config.init({ updateTabInfo: updateTabInfo });
 		ConfigBackupRestore.init();
 		ConfirmDialog.init();
+		UpdateDialog.init();
+		AlertDialog.init();
 		ScriptListDialog.init();
 		RestoreSettingsDialog.init();
+		LimitDialog.init();
 
 		DownloadsEditDialog.init();
 		DownloadsMultiDialog.init();
@@ -233,6 +244,7 @@ var Frontend = (new function($)
 
 		if (firstLoad)
 		{
+			Feeds.redraw();
 			$('#FirstUpdateInfo').hide();
 			$('#Navbar').show();
 			$('#MainTabContent').show();
@@ -246,15 +258,38 @@ var Frontend = (new function($)
 	{
 		var tabname = $(e.target).attr('href');
 		tabname = tabname.substr(1, tabname.length - 4);
+
+		if (activeTab === 'Config' && !Config.canLeaveTab(e.target))
+		{
+			e.preventDefault();
+			return;
+		}
+
+		lastTab = activeTab;
+		activeTab = tabname;
+		
 		$('#SearchBlock .search-query, #SearchBlock .search-clear').hide();
-		$('#' + tabname + 'Table_filter, #' + tabname + 'Table_clearfilter').show();
+		$('#' + activeTab + 'Table_filter, #' + activeTab + 'Table_clearfilter').show();
+
+		switch (activeTab)
+		{
+			case 'Config': Config.show(); break;
+			case 'Messages': Messages.show(); break;
+			case 'History': History.show(); break;
+		}
 	}
 
 	function afterTabShow(e)
 	{
-		if ($(e.target).attr('href') !== '#ConfigTab')
+		switch (lastTab)
 		{
-			Config.cleanup();
+			case 'Config': Config.hide(); break;
+			case 'Messages': Messages.hide(); break;
+			case 'History': History.hide(); break;
+		}
+		switch (activeTab)
+		{
+			case 'Config': Config.shown(); break;
 		}
 	}
 
@@ -302,17 +337,22 @@ var Frontend = (new function($)
 
 		resizeNavbar();
 
-		if (UISettings.miniTheme)
-		{
-			centerPopupMenu('#PlayMenu', true);
-			centerPopupMenu('#RefreshMenu', true);
-		}
+		alignPopupMenu('#PlayMenu');
+		alignPopupMenu('#RefreshMenu');
+		alignPopupMenu('#RssMenu');
+		alignPopupMenu('#StatDialog_MonthMenu', true);
 
-		centerCenterDialogs();
+		alignCenterDialogs();
+		
+		if (initialized)
+		{
+			Downloads.resize();
+		}
 	}
 
-	function centerPopupMenu(menu, center)
+	function alignPopupMenu(menu, right)
 	{
+		var center = UISettings.miniTheme;
 		var $elem = $(menu);
 		if (center)
 		{
@@ -336,10 +376,21 @@ var Frontend = (new function($)
 				top: '',
 				right: ''
 			});
+			var off = $elem.parent().offset();
+			if (off.left + $elem.outerWidth() > $(window).width())
+			{
+				var left = $(window).width() - $elem.outerWidth() - off.left;
+				$elem.css({ left: left });
+			}
+			if (right)
+			{
+				$elem.addClass('pull-right');
+			}
 		}
 	}
-
-	function centerCenterDialogs()
+	this.alignPopupMenu = alignPopupMenu;
+	
+	function alignCenterDialogs()
 	{
 		$.each($('.modal-center'), function(index, element) {
 			Util.centerDialog(element, true);
@@ -392,15 +443,7 @@ var Frontend = (new function($)
 
 	function updateTabInfo(control, stat)
 	{
-		if (stat.filter)
-		{
-			control.removeClass('badge-info').addClass('badge-warning');
-		}
-		else
-		{
-			control.removeClass('badge-warning').addClass('badge-info');
-		}
-
+		control.toggleClass('badge-info', stat.available == stat.total).toggleClass('badge-warning', stat.available != stat.total);
 		control.html(stat.available);
 		control.toggleClass('badge2', stat.total > 9);
 		control.toggleClass('badge3', stat.total > 99);
@@ -425,8 +468,10 @@ var Frontend = (new function($)
 		$('#DownloadsTable').toggleClass('table-check', !UISettings.miniTheme || UISettings.showEditButtons);
 		$('#HistoryTable').toggleClass('table-check', !UISettings.miniTheme || UISettings.showEditButtons);
 
-		centerPopupMenu('#PlayMenu', UISettings.miniTheme);
-		centerPopupMenu('#RefreshMenu', UISettings.miniTheme);
+		alignPopupMenu('#PlayMenu');
+		alignPopupMenu('#RefreshMenu');
+		alignPopupMenu('#RssMenu');
+		alignPopupMenu('#StatDialog_MonthMenu', true);
 
 		if (UISettings.miniTheme)
 		{
@@ -434,6 +479,7 @@ var Frontend = (new function($)
 			$('#DownloadsRecordsPerPageBlock').appendTo($('#DownloadsRecordsPerPageBlockPhone'));
 			$('#HistoryRecordsPerPageBlock').appendTo($('#HistoryRecordsPerPageBlockPhone'));
 			$('#MessagesRecordsPerPageBlock').appendTo($('#MessagesRecordsPerPageBlockPhone'));
+			$('#StatDialog_MonthMenu').appendTo($('#StatDialog_MonthBlockPhone'));
 		}
 		else
 		{
@@ -441,6 +487,7 @@ var Frontend = (new function($)
 			$('#DownloadsRecordsPerPageBlock').appendTo($('#DownloadsTableTopBlock'));
 			$('#HistoryRecordsPerPageBlock').appendTo($('#HistoryTableTopBlock'));
 			$('#MessagesRecordsPerPageBlock').appendTo($('#MessagesTableTopBlock'));
+			$('#StatDialog_MonthMenu').appendTo($('#StatDialog_MonthBlockTop'));
 		}
 
 		if (initialized)
@@ -732,14 +779,30 @@ var ConfirmDialog = (new function($)
 		$('#ConfirmDialog_OK').click(click);
 	}
 
-	this.showModal = function(id, callback)
+	this.showModal = function(id, _actionCallback, initCallback)
 	{
 		$('#ConfirmDialog_Title').html($('#' + id + '_Title').html());
 		$('#ConfirmDialog_Text').html($('#' + id + '_Text').html());
 		$('#ConfirmDialog_OK').html($('#' + id + '_OK').html());
+		var helpId = $('#' + id + '_Help').html();
+		$('#ConfirmDialog_Help').attr('href', '#' + helpId);
+		Util.show('#ConfirmDialog_Help', helpId !== null);
+		
+		actionCallback = _actionCallback;
+		if (initCallback)
+		{
+			initCallback($ConfirmDialog);
+		}
+		
 		Util.centerDialog($ConfirmDialog, true);
-		actionCallback = callback;
-		$ConfirmDialog.modal();
+		$ConfirmDialog.modal({backdrop: 'static'});
+		
+		// avoid showing multiple backdrops when the modal is shown from other modal
+		var backdrops = $('.modal-backdrop');
+		if (backdrops.length > 1)
+		{
+			backdrops.last().remove();
+		}
 	}
 
 	function hidden()
@@ -754,8 +817,32 @@ var ConfirmDialog = (new function($)
 	function click(event)
 	{
 		event.preventDefault(); // avoid scrolling
-		actionCallback();
+		actionCallback($ConfirmDialog);
 		$ConfirmDialog.modal('hide');
+	}
+}(jQuery));
+
+
+/*** ALERT DIALOG *****************************************************/
+
+var AlertDialog = (new function($)
+{
+	'use strict';
+
+	// Controls
+	var $AlertDialog;
+	
+	this.init = function()
+	{
+		$AlertDialog = $('#AlertDialog');
+	}
+
+	this.showModal = function(title, text)
+	{
+		$('#AlertDialog_Title').html(title);
+		$('#AlertDialog_Text').html(text);
+		Util.centerDialog($AlertDialog, true);
+		$AlertDialog.modal();
 	}
 }(jQuery));
 
@@ -768,7 +855,7 @@ var Notification = (new function($)
 	
 	this.show = function(alert, completeFunc)
 	{
-		if (UISettings.showNotifications || $(alert).hasClass('alert-error'))
+		if (UISettings.notifications || $(alert).hasClass('alert-error'))
 		{
 			$(alert).animate({'opacity':'toggle'});
 			var duration = $(alert).attr('data-duration');
