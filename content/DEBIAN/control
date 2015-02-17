@@ -1,9 +1,9 @@
 Origin: XBian
 Package: xbian-package-nzbget
-Version: 14.1
+Version: 14.2
 Section: net
 Priority: optional
 Architecture: armhf
 Depends: xbian-update, libncurses5, libssl1.0.0, libxml2, unrar
 Maintainer: freem@n <http://forum.xbian.org/user-1694.html>
-Description: NZBGet 14.1 compiled, patched and configured for XBian
+Description: NZBGet 14.2 compiled, patched and configured for XBian
