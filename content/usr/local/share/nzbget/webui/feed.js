@@ -1,7 +1,7 @@
 /*
  *  This file is part of nzbget
  *
- *  Copyright (C) 2013 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ *  Copyright (C) 2013-2015 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 1045 $
- * $Date: 2014-06-19 17:00:46 +0200 (Thu, 19 Jun 2014) $
+ * $Revision$
+ * $Date$
  *
  */
 
@@ -60,10 +60,13 @@ var Feeds = (new function($)
 			{
 				var item = menuItemTemplate.clone();
 				var name = Options.option('Feed' + i + '.Name');
-				var a = $('a', item);
+				var a = $('span', item);
 				a.text(name !== '' ? name : 'Feed' + i);
 				a.attr('data-id', i);
 				a.click(viewFeed);
+				var im = $('button', item);
+				im.click(fetchFeed);
+				im.attr('data-id', i);
 				insertPos.before(item);
 			}
 		}
@@ -77,11 +80,20 @@ var Feeds = (new function($)
 		FeedDialog.showModal(id);
 	}
 
+	function fetchFeed()
+	{
+		var id = parseInt($(this).attr('data-id'));
+		RPC.call('fetchfeed', [id], function()
+		{
+			Notification.show('#Notif_Feeds_Fetch');
+		});
+	}
+
 	this.fetchAll = function()
 	{
 		RPC.call('fetchfeed', [0], function()
 		{
-			Notification.show('#Notif_Feeds_FetchAll');
+			Notification.show('#Notif_Feeds_Fetch');
 		});
 	}
 }(jQuery));
@@ -113,15 +125,14 @@ var FeedDialog = (new function($)
 			{
 				filterInput: '#FeedDialog_ItemTable_filter',
 				pagerContainer: '#FeedDialog_ItemTable_pager',
-				filterCaseSensitive: false,
 				headerCheck: '#FeedDialog_ItemTable > thead > tr:first-child',
 				pageSize: pageSize,
 				hasHeader: true,
 				renderCellCallback: itemsTableRenderCellCallback
 			});
 
-		$ItemTable.on('click', 'tbody div.check',
-			function(event) { $ItemTable.fasttable('itemCheckClick', this.parentNode.parentNode, event); });
+		$ItemTable.on('click', UISettings.rowSelect ? 'tbody tr' : 'tbody div.check',
+			function(event) { $ItemTable.fasttable('itemCheckClick', UISettings.rowSelect ? this : this.parentNode.parentNode, event); });
 		$ItemTable.on('click', 'thead div.check',
 			function() { $ItemTable.fasttable('titleCheckClick') });
 		$ItemTable.on('mousedown', Util.disableShiftMouseDown);
@@ -145,7 +156,7 @@ var FeedDialog = (new function($)
 		}
 	}
 
-	this.showModal = function(id, name, url, filter, pauseNzb, category, priority)
+	this.showModal = function(id, name, url, filter, backlog, pauseNzb, category, priority, interval, feedscript)
 	{
 		Refresher.pause();
 
@@ -171,7 +182,7 @@ var FeedDialog = (new function($)
 
 		$('.loading-block', $FeedDialog).show();
 
-		if (id > 0)
+		if (name === undefined)
 		{
 			var name = Options.option('Feed' + id + '.Name');
 			$('#FeedDialog_Title').text(name !== '' ? name : 'Feed');
@@ -180,10 +191,14 @@ var FeedDialog = (new function($)
 		else
 		{
 			$('#FeedDialog_Title').text(name !== '' ? name : 'Feed Preview');
+			var feedBacklog = backlog === 'yes';
 			var feedPauseNzb = pauseNzb === 'yes';
 			var feedCategory = category;
 			var feedPriority = parseInt(priority);
-			RPC.call('previewfeed', [name, url, filter, feedPauseNzb, feedCategory, feedPriority, false, 0, ''], itemsLoaded, feedFailure);
+			var feedInterval = parseInt(interval);
+			var feedScript = feedscript;
+			RPC.call('previewfeed', [id, name, url, filter, feedBacklog, feedPauseNzb, feedCategory,
+				feedPriority, feedInterval, feedScript, false, 0, ''], itemsLoaded, feedFailure);
 		}
 	}
 
@@ -270,7 +285,7 @@ var FeedDialog = (new function($)
 				id: item.URL,
 				item: item,
 				fields: fields,
-				search: item.Status + ' ' + itemName + ' ' + item.Category  + ' ' + age + ' ' + size
+				data: { status: item.Status, name: itemName, category: item.Category, age: age, size: size, _search: true }
 			};
 
 			data.push(item);
@@ -320,7 +335,8 @@ var FeedDialog = (new function($)
 	this.fetch = function()
 	{
 		var checkedRows = $ItemTable.fasttable('checkedRows');
-		if (checkedRows.length == 0)
+		var checkedCount = $ItemTable.fasttable('checkedCount');
+		if (checkedCount === 0)
 		{
 			Notification.show('#Notif_FeedDialog_Select');
 			return;
@@ -332,7 +348,7 @@ var FeedDialog = (new function($)
 		for (var i = 0; i < items.length; i++)
 		{
 			var item = items[i];
-			if (checkedRows.indexOf(item.URL) > -1)
+			if (checkedRows[item.URL])
 			{
 				fetchItems.push(item);
 			}
@@ -407,12 +423,16 @@ var FeedFilterDialog = (new function($)
 	var tableInitialized = false;
 	var saveCallback;
 	var splitStartPos;
+	var feedId;
 	var feedName;
 	var feedUrl;
 	var feedFilter;
+	var feedBacklog;
 	var feedPauseNzb;
 	var feedCategory;
 	var feedPriority;
+	var feedInterval;
+	var feedScript;
 	var cacheTimeSec;
 	var cacheId;
 	var updating;
@@ -448,7 +468,6 @@ var FeedFilterDialog = (new function($)
 			{
 				filterInput: '',
 				pagerContainer: '#FeedFilterDialog_ItemTable_pager',
-				filterCaseSensitive: false,
 				headerCheck: '',
 				pageSize: pageSize,
 				hasHeader: true,
@@ -479,7 +498,7 @@ var FeedFilterDialog = (new function($)
 		}
 	}
 
-	this.showModal = function(name, url, filter, pauseNzb, category, priority, _saveCallback)
+	this.showModal = function(id, name, url, filter, backlog, pauseNzb, category, priority, interval, feedscript, _saveCallback)
 	{
 		saveCallback = _saveCallback;
 
@@ -510,18 +529,23 @@ var FeedFilterDialog = (new function($)
 		$LoadingBlock.show();
 
 		$('#FeedFilterDialog_Title').text(name !== '' ? name : 'Feed Preview');
+		feedId = id;
 		feedName = name;
 		feedUrl = url;
 		feedFilter = filter;
+		feedBacklog = backlog === 'yes';
 		feedPauseNzb = pauseNzb === 'yes';
 		feedCategory = category;
 		feedPriority = parseInt(priority);
+		feedInterval = parseInt(interval);
+		feedScript = feedscript;
 		cacheId = '' + Math.random()*10000000;
 		cacheTimeSec = 60*10; // 10 minutes
 
 		if (url !== '')
 		{
-			RPC.call('previewfeed', [name, url, filter, feedPauseNzb, feedCategory, feedPriority, true, cacheTimeSec, cacheId], itemsLoaded, feedFailure);
+			RPC.call('previewfeed', [feedId, name, url, filter, feedBacklog, feedPauseNzb, feedCategory, feedPriority,
+				feedInterval, feedScript, true, cacheTimeSec, cacheId], itemsLoaded, feedFailure);
 		}
 		else
 		{
@@ -545,7 +569,8 @@ var FeedFilterDialog = (new function($)
 		updating = true;
 
 		var filter = $FilterInput.val().replace(/\n/g, '%');
-		RPC.call('previewfeed', [feedName, feedUrl, filter, feedPauseNzb, feedCategory, feedPriority, true, cacheTimeSec, cacheId], itemsLoaded, feedFailure);
+		RPC.call('previewfeed', [feedId, feedName, feedUrl, filter, feedBacklog, feedPauseNzb, feedCategory, feedPriority,
+			feedInterval, feedScript, true, cacheTimeSec, cacheId], itemsLoaded, feedFailure);
 
 		setTimeout(function()
 		{
@@ -660,7 +685,7 @@ var FeedFilterDialog = (new function($)
 				id: item.URL,
 				item: item,
 				fields: fields,
-				search: item.Match + ' ' + itemName + ' ' + item.Category  + ' ' + age + ' ' + size
+				data: { match: item.Match, rule: item.Rule, title: itemName, category: item.Category, age: age, size: size, _search: true }
 			};
 
 			data.push(dataItem);

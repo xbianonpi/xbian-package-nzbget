@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2015 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 1043 $
- * $Date: 2014-06-13 23:53:27 +0200 (Fri, 13 Jun 2014) $
+ * $Revision$
+ * $Date$
  *
  */
 
@@ -477,6 +477,7 @@ var RPC = (new function($)
 	this.rpcUrl;
 	this.defaultFailureCallback;
 	this.connectErrorMessage = 'Cannot establish connection';
+	var XAuthToken;
 
 	this.call = function(method, params, completed_callback, failure_callback, timeout)
 	{
@@ -486,6 +487,11 @@ var RPC = (new function($)
 		var xhr = new XMLHttpRequest();
 
 		xhr.open('post', this.rpcUrl);
+		
+		if (XAuthToken !== undefined)
+		{
+			xhr.setRequestHeader('X-Auth-Token', XAuthToken);
+		}
 		
 		if (timeout)
 		{
@@ -519,13 +525,18 @@ var RPC = (new function($)
 							{
 								if (result.error == null)
 								{
+									XAuthToken = xhr.getResponseHeader('X-Auth-Token');
 									res = result.result;
 									completed_callback(res);
 									return;
 								}
 								else
 								{
-									res = result.error.message + '<br><br>Request: ' + request;
+									res = result.error.message;
+									if (result.error.message != 'Access denied')
+									{
+										res = res + '<br><br>Request: ' + request;
+									}
 								}
 							}
 						}

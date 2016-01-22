@@ -1,7 +1,7 @@
 /*
  * This file is part of nzbget
  *
- * Copyright (C) 2012-2014 Andrey Prygunkov <hugbug@users.sourceforge.net>
+ * Copyright (C) 2012-2015 Andrey Prygunkov <hugbug@users.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * $Revision: 1097 $
- * $Date: 2014-08-19 21:56:09 +0200 (Tue, 19 Aug 2014) $
+ * $Revision$
+ * $Date$
  *
  */
 
@@ -39,6 +39,7 @@ var Options = (new function($)
 	this.options;
 	this.postParamConfig;
 	this.categories = [];
+	this.restricted = false;
 
 	// State
 	var _this = this;
@@ -62,6 +63,7 @@ var Options = (new function($)
 		RPC.call('config', [], function(_options) {
 			_this.options = _options;
 			initCategories();
+			_this.restricted = _this.option('ControlPort') === '***';
 
 			// loading config templates and build list of post-processing parameters
 			_this.postParamConfig = [];
@@ -156,6 +158,7 @@ var Options = (new function($)
 			scriptConfig.scan = serverTemplateData[i].ScanScript;
 			scriptConfig.queue = serverTemplateData[i].QueueScript;
 			scriptConfig.scheduler = serverTemplateData[i].SchedulerScript;
+			scriptConfig.feed = serverTemplateData[i].FeedScript;
 			mergeValues(scriptConfig.sections, serverValues);
 			config.push(scriptConfig);
 		}
@@ -502,6 +505,7 @@ var Config = (new function($)
 		$ConfigTitle = $('#ConfigTitle');
 		$ViewButton = $('#Config_ViewButton');
 		$LeaveConfigDialog = $('#LeaveConfigDialog');
+		$('#ConfigTable_filter').val('');
 
 		Util.show('#ConfigBackupSafariNote', $.browser.safari);
 		$('#ConfigTable_filter').val('');
@@ -512,7 +516,7 @@ var Config = (new function($)
 
 		$ConfigNav.on('click', 'li > a', navClick);
 
-		$ConfigTable = $({});
+		$ConfigTable = $('#ConfigTable');
 		$ConfigTable.fasttable(
 			{
 				filterInput: $('#ConfigTable_filter'),
@@ -643,7 +647,7 @@ var Config = (new function($)
 
 	/*** GENERATE HTML PAGE *****************************************************************/
 
-	function buildOptionsContent(section)
+	function buildOptionsContent(section, extensionsec)
 	{
 		var html = '';
 
@@ -653,6 +657,13 @@ var Config = (new function($)
 
 		for (var i=0, op=0; i < section.options.length; i++)
 		{
+			if (i > 0 && extensionsec && Options.restricted)
+			{
+				// in restricted mode don't show any options for extension scripts,
+				// option's content is hidden content anyway (***)
+				break;
+			}
+			
 			var option = section.options[i];
 			if (!option.template)
 			{
@@ -807,7 +818,7 @@ var Config = (new function($)
 			htmldescr = htmldescr.replace(/NOTE: do not forget to uncomment the next line.\n/, '');
 
 			// replace option references
-			var exp = /\<([A-Z0-9]*)\>/ig;
+			var exp = /\<([A-Z0-9\.]*)\>/ig;
 			htmldescr = htmldescr.replace(exp, '<a class="option" href="#" onclick="Config.scrollToOption(event, this)">$1</a>');
 
 			htmldescr = htmldescr.replace(/&/g, '&amp;');
@@ -867,13 +878,22 @@ var Config = (new function($)
 
 		if (hasoptions)
 		{
-			html += '<div class="' + section.id + ' multiid' + multiid + ' multiset">';
-			html += '<button type="button" class="btn config-delete" data-multiid="' + multiid + ' multiset" ' +
+			html += '<div class="' + section.id + ' multiid' + multiid + ' multiset multiset-toolbar">';
+			html += '<button type="button" class="btn config-button config-delete" data-multiid="' + multiid + '" ' +
 				'onclick="Config.deleteSet(this, \'' + setname + '\',\'' + section.id + '\')">Delete ' + setname + multiid + '</button>';
+			html += ' <button type="button" class="btn config-button" data-multiid="' + multiid + '" ' +
+				'onclick="Config.moveSet(this, \'' + setname + '\',\'' + section.id + '\', \'up\')">Move Up</button>';
+			html += ' <button type="button" class="btn config-button" data-multiid="' + multiid + '" ' +
+				'onclick="Config.moveSet(this, \'' + setname + '\',\'' + section.id + '\', \'down\')">Move Down</button>';
 			if (setname.toLowerCase() === 'feed')
 			{
-				html += ' <button type="button" class="btn config-previewfeed config-feed" data-multiid="' + multiid + ' multiset" ' +
+				html += ' <button type="button" class="btn config-button" data-multiid="' + multiid + '" ' +
 					'onclick="Config.previewFeed(this, \'' + setname + '\',\'' + section.id + '\')">Preview Feed</button>';
+			}
+			if (setname.toLowerCase() === 'server')
+			{
+				html += ' <button type="button" class="btn config-button" data-multiid="' + multiid + '" ' +
+					'onclick="Config.testConnection(this, \'' + setname + '\',\'' + section.id + '\')">Test Connection</button>';
 			}
 			html += '<hr>';
 			html += '</div>';
@@ -917,7 +937,7 @@ var Config = (new function($)
 				{
 					var html = $('<li><a href="#' + section.id + '">' + section.name + '</a></li>');
 					$ConfigNav.append(html);
-					var content = buildOptionsContent(section);
+					var content = buildOptionsContent(section, k > 0);
 					$ConfigData.append(content);
 					added = true;
 				}
@@ -1027,6 +1047,10 @@ var Config = (new function($)
 				if (optname.indexOf('queuescript') > -1)
 				{
 					option.editor = { caption: 'Choose', click: 'Config.editQueueScript' };
+				}
+				if (optname.indexOf('feedscript') > -1)
+				{
+					option.editor = { caption: 'Choose', click: 'Config.editFeedScript' };
 				}
 				if (optname.indexOf('task') > -1 && optname.indexOf('.param') > -1)
 				{
@@ -1209,36 +1233,56 @@ var Config = (new function($)
 
 	function reformatSection(section, setname)
 	{
-		var oldMultiId = -1;
-		var newMultiId = 0;
+		var hasOptions = false;
+		var lastMultiId = 0;
 		for (var j=0; j < section.options.length; j++)
 		{
 			var option = section.options[j];
 			if (!option.template)
 			{
-				if (option.multiid !== oldMultiId)
+				if (option.multiid !== lastMultiId && option.multiid !== lastMultiId + 1)
 				{
-					oldMultiId = option.multiid;
-					newMultiId++;
-
-					// reformat multiid
-					var div = $('#' + setname + oldMultiId);
-					div.attr('id', setname + newMultiId);
-
-					// update captions
-					$('.config-settitle.' + section.id + '.multiid' + oldMultiId, $ConfigData).text(setname + newMultiId);
-					$('.' + section.id + '.multiid' + oldMultiId + ' .config-multicaption', $ConfigData).text(setname + newMultiId + '.');
-					$('.' + section.id + '.multiid' + oldMultiId + ' .config-delete', $ConfigData).text('Delete ' + setname + newMultiId).attr('data-multiid', newMultiId);
-					$('.' + section.id + '.multiid' + oldMultiId + ' .config-feed', $ConfigData).attr('data-multiid', newMultiId);
-
-					//update class
-					$('.' + section.id + '.multiid' + oldMultiId, $ConfigData).removeClass('multiid' + oldMultiId).addClass('multiid' + newMultiId);
+					reformatSet(section, setname, option.multiid, lastMultiId + 1);
 				}
+				lastMultiId = option.multiid;
+				hasOptions = true;
+			}
+		}
+
+		// update add-button
+		var addButton = $('.config-add.' + section.id, $ConfigData);
+		addButton.text('Add ' + (hasOptions ? 'another ' : '') + setname);
+	}
+
+	function reformatSet(section, setname, oldMultiId, newMultiId)
+	{
+		for (var j=0; j < section.options.length; j++)
+		{
+			var option = section.options[j];
+			if (!option.template && option.multiid == oldMultiId)
+			{
+				// reformat multiid
+				var div = $('#' + setname + oldMultiId);
+				div.attr('id', setname + newMultiId);
+
+				// update captions
+				$('.config-settitle.' + section.id + '.multiid' + oldMultiId, $ConfigData).text(setname + newMultiId);
+				$('.' + section.id + '.multiid' + oldMultiId + ' .config-multicaption', $ConfigData).text(setname + newMultiId + '.');
+				$('.' + section.id + '.multiid' + oldMultiId + ' .config-delete', $ConfigData).text('Delete ' + setname + newMultiId);
+
+				//update data id
+				$('.' + section.id + '.multiid' + oldMultiId + ' .config-button', $ConfigData).attr('data-multiid', newMultiId);
+
+				//update class
+				$('.' + section.id + '.multiid' + oldMultiId, $ConfigData).removeClass('multiid' + oldMultiId).addClass('multiid' + newMultiId);
 
 				// update input id
 				var oldFormId = option.formId;
 				option.formId = option.formId.replace(new RegExp(option.multiid), newMultiId);
 				$('#' + oldFormId).attr('id', option.formId);
+
+				// update label data-optid
+				$('a[data-optid=' + oldFormId + ']').attr('data-optid', option.formId);
 
 				// update editor id
 				$('#' + oldFormId + '_Editor').attr('id', option.formId + '_Editor');
@@ -1249,12 +1293,8 @@ var Config = (new function($)
 				option.multiid = newMultiId;
 			}
 		}
-
-		// update add-button
-		var addButton = $('.config-add.' + section.id, $ConfigData);
-		addButton.text('Add ' + (newMultiId > 0 ? 'another ' : '') + setname);
 	}
-
+	
 	this.addSet = function(setname, sectionId)
 	{
 		// find section
@@ -1322,6 +1362,31 @@ var Config = (new function($)
 		});
 	}
 
+	this.moveSet = function(control, setname, sectionId, direction)
+	{
+		var id1 = parseInt($(control).attr('data-multiid'));
+		var id2 = direction === 'down' ? id1 + 1 : id1 - 1;
+
+		// swap options in two sets
+		var opts1 = $('.' + sectionId + '.multiid' + (direction === 'down' ? id1 : id2), $ConfigData);
+		var opts2 = $('.' + sectionId + '.multiid' + (direction === 'down' ? id2 : id1), $ConfigData);
+		
+		if (opts1.length === 0 || opts2.length === 0)
+		{
+			return;
+		}
+		
+		opts1.first().before(opts2);
+
+		// reformat remaining sets (captions, input IDs, etc.)
+		var section = findSectionById(sectionId);
+		reformatSet(section, setname, id2, 10000 + id2);
+		reformatSet(section, setname, id1, id2);
+		reformatSet(section, setname, 10000 + id2, id1);
+
+		section.modified = true;
+	}
+
 	this.viewMode = function()
 	{
 		compactMode = !compactMode;
@@ -1361,6 +1426,12 @@ var Config = (new function($)
 		ScriptListDialog.showModal(option, config, 'queue');
 	}
 
+	this.editFeedScript = function(optFormId)
+	{
+		var option = findOptionById(optFormId);
+		ScriptListDialog.showModal(option, config, 'feed');
+	}
+
 	this.editSchedulerScript = function(optFormId)
 	{
 		var option = findOptionById(optFormId);
@@ -1386,12 +1457,16 @@ var Config = (new function($)
 	{
 		var option = findOptionById(optFormId);
 		FeedFilterDialog.showModal(
+			option.multiid,
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.Name')),
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.URL')),
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.Filter')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Backlog')),
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.PauseNzb')),
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.Category')),
 			getOptionValue(findOptionByName('Feed' + option.multiid + '.Priority')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.Interval')),
+			getOptionValue(findOptionByName('Feed' + option.multiid + '.FeedScript')),
 			function(filter)
 				{
 					var control = $('#' + option.formId);
@@ -1402,13 +1477,66 @@ var Config = (new function($)
 	this.previewFeed = function(control, setname, sectionId)
 	{
 		var multiid = parseInt($(control).attr('data-multiid'));
-		FeedDialog.showModal(0,
+		FeedDialog.showModal(multiid,
 			getOptionValue(findOptionByName('Feed' + multiid + '.Name')),
 			getOptionValue(findOptionByName('Feed' + multiid + '.URL')),
 			getOptionValue(findOptionByName('Feed' + multiid + '.Filter')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.Backlog')),
 			getOptionValue(findOptionByName('Feed' + multiid + '.PauseNzb')),
 			getOptionValue(findOptionByName('Feed' + multiid + '.Category')),
-			getOptionValue(findOptionByName('Feed' + multiid + '.Priority')));
+			getOptionValue(findOptionByName('Feed' + multiid + '.Priority')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.Interval')),
+			getOptionValue(findOptionByName('Feed' + multiid + '.FeedScript')));
+	}
+
+	/*** TEST SERVER ********************************************************************/
+
+	var connecting = false;
+	
+	this.testConnection = function(control, setname, sectionId)
+	{
+		if (connecting)
+		{
+			return;
+		}
+
+		connecting = true;
+		$('#Notif_Config_TestConnectionProgress').fadeIn(function() {
+			var multiid = parseInt($(control).attr('data-multiid'));
+			var timeout = Math.min(parseInt(getOptionValue(findOptionByName('ArticleTimeout'))), 10);
+			RPC.call('testserver', [
+				getOptionValue(findOptionByName('Server' + multiid + '.Host')),
+				parseInt(getOptionValue(findOptionByName('Server' + multiid + '.Port'))),
+				getOptionValue(findOptionByName('Server' + multiid + '.Username')),
+				getOptionValue(findOptionByName('Server' + multiid + '.Password')),
+				getOptionValue(findOptionByName('Server' + multiid + '.Encryption')) === 'yes',
+				getOptionValue(findOptionByName('Server' + multiid + '.Cipher')),
+				timeout
+				],
+				function(errtext) {
+					$('#Notif_Config_TestConnectionProgress').fadeOut(function() {
+						if (errtext == '')
+						{
+							Notification.show('#Notif_Config_TestConnectionOK');
+						}
+						else
+						{
+							AlertDialog.showModal('Connection test failed', errtext);
+						}
+					});
+					connecting = false;
+				},
+				function(message, resultObj) {
+					$('#Notif_Config_TestConnectionProgress').fadeOut(function() {
+						if (resultObj && resultObj.error && resultObj.error.message)
+						{
+							message = resultObj.error.message;
+						}
+						AlertDialog.showModal('Connection test failed', message);
+						connecting = false;
+					});
+				});
+		});
 	}
 
 	/*** SAVE ********************************************************************/
@@ -1634,6 +1762,8 @@ var Config = (new function($)
 		$ConfigTabBadgeEmpty.show();
 	}
 
+	var searcher = new FastSearcher();
+
 	function search()
 	{
 		$ConfigTabBadge.show();
@@ -1642,7 +1772,8 @@ var Config = (new function($)
 
 		$ConfigData.children().hide();
 
-		var words = filterText.toLowerCase().split(' ');
+		searcher.compile(filterText);
+		
 		var total = 0;
 		var available = 0;
 
@@ -1660,7 +1791,7 @@ var Config = (new function($)
 						if (!option.template)
 						{
 							total++;
-							if (filterOption(option, words))
+							if (filterOption(option))
 							{
 								available++;
 								var opt = $('#' + option.formId).closest('.control-group');
@@ -1672,7 +1803,7 @@ var Config = (new function($)
 			}
 		}
 
-		filterStaticPages(words);
+		filterStaticPages();
 
 		markLastControlGroup();
 
@@ -1682,33 +1813,20 @@ var Config = (new function($)
 		updateTabInfo($ConfigTabBadge, { filter: true, available: available, total: total});
 	}
 
-	function filterOption(option, words)
+	function filterOption(option)
 	{
-		return filterWords(option.caption + ' ' + option.description + ' ' + (option.value === null ? '' : option.value), words);
+		return searcher.exec({ name: option.caption, description: option.description, value: (option.value === null ? '' : option.value), _search: ['name', 'description', 'value'] });
 	}
 
-	function filterStaticPages(words)
+	function filterStaticPages()
 	{
 		$ConfigData.children().filter('.config-static').each(function(index, element)
 			{
-				var text = $(element).text();
-				Util.show(element, filterWords(text, words));
+				var name = $('.control-label', element).text();
+				var description = $('.controls', element).text();
+				var found = searcher.exec({ name: name, description: description, value: '', _search: ['name', 'description'] });
+				Util.show(element, found);
 			});
-	}
-
-	function filterWords(text, words)
-	{
-		var search = text.toLowerCase();
-
-		for (var i = 0; i < words.length; i++)
-		{
-			if (search.indexOf(words[i]) === -1)
-			{
-				return false;
-			}
-		}
-
-		return true;
 	}
 
 	function markLastControlGroup()
@@ -1918,7 +2036,6 @@ var ScriptListDialog = (new function($)
 			{
 				id: scriptName,
 				fields: fields,
-				search: ''
 			};
 			data.push(item);
 
@@ -1999,7 +2116,7 @@ var ScriptListDialog = (new function($)
 			for (var i=0; i < scriptList.length; i++)
 			{
 				var scriptName = scriptList[i];
-				if (checkedRows.indexOf(scriptName) > -1)
+				if (checkedRows[scriptName])
 				{
 					selectedList += (selectedList == '' ? '' : ', ') + scriptName;
 				}
@@ -2317,7 +2434,7 @@ var ConfigBackupRestore = (new function($)
 			for (var i=0; i < conf.sections.length; i++)
 			{
 				var section = conf.sections[i];
-				if (!section.hidden && selectedSections.indexOf(section.id) > -1)
+				if (!section.hidden && selectedSections[section.id])
 				{
 					for (var m=0; m < section.options.length; m++)
 					{
@@ -2398,7 +2515,6 @@ var RestoreSettingsDialog = (new function($)
 					{
 						id: section.id,
 						fields: fields,
-						search: ''
 					};
 					data.push(item);
 				}
@@ -2413,13 +2529,14 @@ var RestoreSettingsDialog = (new function($)
 
 		var	 selectedSections = [];
 		var checkedRows = $SectionTable.fasttable('checkedRows');
-		if (checkedRows.length === 0)
+		var checkedCount = $SectionTable.fasttable('checkedCount');
+		if (checkedCount === 0)
 		{
 			Notification.show('#Notif_Config_RestoreSections');
 			return;
 		}
 
-		checkedRows = $.extend([], checkedRows); // clone
+		checkedRows = $.extend({}, checkedRows); // clone
 		$RestoreSettingsDialog.modal('hide');
 
 		setTimeout(function() { restoreClick(checkedRows); }, 0);
@@ -2445,6 +2562,7 @@ var UpdateDialog = (new function($)
 	var UpdateInfo;
 	var lastUpTimeSec;
 	var installing = false;
+	var logReceived = false;
 
 	this.init = function()
 	{
@@ -2487,7 +2605,7 @@ var UpdateDialog = (new function($)
 
 		$UpdateDialog.modal({backdrop: 'static'});
 
-		RPC.call('readurl', ['http://nzbget.net/info/nzbget-version.php?nocache=' + new Date().getTime(), 'version info'], loadedUpstreamInfo, error);
+		RPC.call('readurl', ['http://nzbget.net/info/nzbget-version.json?nocache=' + new Date().getTime(), 'version info'], loadedUpstreamInfo, error);
 	}
 	
 	function error(e)
@@ -2512,26 +2630,32 @@ var UpdateDialog = (new function($)
 		}
 		else
 		{
-			loadSvnVerData();
+			loadGitVerData();
 		}
 	}
 
-	function loadSvnVerData()
+	function loadGitVerData()
 	{
 		// fetching devel version number from svn viewer
-		RPC.call('readurl', ['http://svn.code.sf.net/p/nzbget/code/trunk/', 'svn revision info'], 
-			function(svnRevData)
+		RPC.call('readurl', ['https://github.com/nzbget/nzbget', 'git revision info'], 
+			function(gitRevData)
 			{
-				RPC.call('readurl', ['http://svn.code.sf.net/p/nzbget/code/trunk/configure.ac', 'svn branch info'], 
-					function(svnBranchData)
+				RPC.call('readurl', ['https://raw.githubusercontent.com/nzbget/nzbget/develop/configure.ac', 'git branch info'], 
+					function(gitBranchData)
 					{
-						var rev = svnRevData.match(/.*Revision (\d+).*/);
-						if (rev.length > 1)
+						var html = document.createElement('DIV');
+						html.innerHTML = gitRevData;
+						html = html.textContent || html.innerText || '';
+						html = html.replace(/(?:\r\n|\r|\n)/g, ' ');
+						var rev = html.match(/([0-9\,]*)\s*commits/);
+   
+						if (rev && rev.length > 1)
 						{
-							var ver = svnBranchData.match(/.*AM_INIT_AUTOMAKE\(nzbget, (.*)\).*/);
-							if (ver.length > 1)
+							rev = rev[1].replace(',', '');
+							var ver = gitBranchData.match(/AC_INIT\(nzbget, (.*), .*/);
+							if (ver && ver.length > 1)
 							{
-								VersionInfo['devel-version'] = ver[1] + '-r' + rev[1];
+								VersionInfo['devel-version'] = ver[1] + '-r' + rev;
 							}
 						}
 						
@@ -2651,7 +2775,7 @@ var UpdateDialog = (new function($)
 		
 		if (!script)
 		{
-			alert('Something is wrong with a package configuration file "package-info.json".');
+			alert('Something is wrong with the package configuration file "package-info.json".');
 			return;
 		}
 
@@ -2687,16 +2811,24 @@ var UpdateDialog = (new function($)
 	{
 		RPC.call('logupdate', [0, 100], function(data)
 			{
-				updateLogTable(data);
-				setTimeout(updateLog, 500);
-			},
-			function()
-			{
-				// rpc-failure: the program has been terminated. Waiting for new instance.
-				setLogContentAndScroll($UpdateProgressDialog_Log.html() + '\n' + 'NZBGet has been terminated. Waiting for restart...');
-				setTimeout(checkStatus, 500);
-			},
-			1000);
+				logReceived = logReceived || data.length > 0;
+				if (logReceived && data.length === 0)
+				{
+					terminated();
+				}
+				else
+				{
+					updateLogTable(data);
+					setTimeout(updateLog, 500);
+				}
+			}, terminated);
+	}
+
+	function terminated()
+	{
+		// rpc-failure: the program has been terminated. Waiting for new instance.
+		setLogContentAndScroll($UpdateProgressDialog_Log.html() + '\n' + 'NZBGet has been terminated. Waiting for restart...');
+		setTimeout(checkStatus, 500);
 	}
 
 	function setLogContentAndScroll(html)
@@ -2734,7 +2866,10 @@ var UpdateDialog = (new function($)
 				{
 					// the old instance is not restarted yet
 					// waiting 0.5 sec. and retrying
-					setTimeout(checkStatus, 500);
+					if ($('#UpdateProgressDialog').is(':visible'))
+					{
+						setTimeout(checkStatus, 500);
+					}
 				}
 				else
 				{
@@ -2749,9 +2884,11 @@ var UpdateDialog = (new function($)
 			function()
 			{
 				// Failure, waiting 0.5 sec. and retrying
-				setTimeout(checkStatus, 500);
-			},
-			1000);
+				if ($('#UpdateProgressDialog').is(':visible'))
+				{
+					setTimeout(checkStatus, 500);
+				}
+			});
 	}
 	
 }(jQuery));
