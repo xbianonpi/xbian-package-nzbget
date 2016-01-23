@@ -24,12 +24,14 @@ if [[ $1 == "configure" ]]; then
 
 	chmod 777 /home/xbian/torrents
 	chown xbian:xbian /home/xbian/torrents
-	chown xbian:xbian /usr/local/share/nzbget/
-	chown xbian:xbian /usr/local/share/doc/nzbget/
+	chown -R xbian:xbian /usr/local/share/nzbget/
+	chown -R xbian:xbian /usr/local/share/doc/nzbget/
 
 	chmod 777 /etc/nzbget/nzbget.conf
 
 	sed -i 's/ControlUser=/ControlUsername=/g' /etc/nzbget/nzbget.conf
+
+	[ -e /etc/nzbget/ppscripts ] || ln -s /usr/local/share/nzbget/scripts/ /etc/nzbget/ppscripts
 
 	/etc/init.d/nzbget start 2>/dev/null 1>/dev/null >/dev/null; 
 
