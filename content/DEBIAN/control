@@ -1,6 +1,6 @@
 Origin: XBian
 Package: xbian-package-nzbget
-Version: 16.4
+Version: 16.4-xbian1
 Section: net
 Priority: optional
 Architecture: armhf
